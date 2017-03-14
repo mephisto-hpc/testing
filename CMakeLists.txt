@@ -7,14 +7,11 @@ LIST(APPEND CMAKE_MODULE_PATH "${ALPAKA_ROOT}")
 FIND_PACKAGE("alpaka" REQUIRED)
 
 INCLUDE("${ALPAKA_ROOT}/cmake/common.cmake")
-#INCLUDE("${ALPAKA_ROOT}/cmake/dev.cmake")
+INCLUDE("${ALPAKA_ROOT}/cmake/dev.cmake")
 
 ALPAKA_ADD_EXECUTABLE(
-    alpaka-vxv
-    "alpaka-vxv.cpp")
-TARGET_COMPILE_OPTIONS(
-    alpaka-vxv
-    PRIVATE ${ALPAKA_DEV_COMPILE_OPTIONS})
+    alpaka-mxv
+    "alpaka-mxv.cpp")
 TARGET_LINK_LIBRARIES(
-    alpaka-vxv
+    alpaka-mxv
     PUBLIC "alpaka")
