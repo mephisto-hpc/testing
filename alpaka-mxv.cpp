@@ -69,7 +69,7 @@ struct HostInitBlockVector
         typename TData,
         typename TSize,
         typename TExtent>
-    ALPAKA_FN_ACC_NO_CUDA auto operator()(
+    ALPAKA_FN_ACC auto operator()(
         TAcc const & acc,
         TData * block,
         TData initValue,
@@ -101,6 +101,49 @@ struct HostInitBlockVector
         TSize global_y = blockIdx * extents[2u] + globalThreadIdx[0u];
 
         block[linearizedGlobalThreadIdx[0u]] = global_y < extents[0u] ? initValue : invalidValue;
+    }
+};
+
+/**
+ */
+struct BlockMultMatrixVector
+{
+    template<
+        typename TAcc,
+        typename TData,
+        typename TSize>
+    ALPAKA_FN_ACC auto operator()(
+        TAcc const & acc,
+        TData * const y,
+        TData const * const A,
+        TData const * const x,
+        TSize BS ) const
+    -> void
+    {
+        /**
+         * In the most cases the parallel work distibution depends
+         * on the current index of a thread and how many threads
+         * exist overall. These information can be obtained by
+         * getIdx() and getWorkDiv(). In this example these
+         * values are obtained for a global scope.
+         */
+        auto const globalThreadIdx = alpaka::idx::getIdx<alpaka::Grid, alpaka::Threads>(acc);
+        auto const globalThreadExtent = alpaka::workdiv::getWorkDiv<alpaka::Grid, alpaka::Threads>(acc);
+
+        /**
+         * Map the three dimensional thread index into a
+         * one dimensional thread index space. We call it
+         * linearize the thread index.
+         */
+        auto const linearizedGlobalThreadIdx = alpaka::idx::mapIdx<1u>(
+            globalThreadIdx,
+            globalThreadExtent);
+
+        TData prod = 0.0;
+        for (TSize local_x = 0; local_x < BS; ++local_x) {
+            prod += A[linearizedGlobalThreadIdx[0u] * BS + local_x] * x[local_x];
+        }
+        y[linearizedGlobalThreadIdx[0u]] += prod;
     }
 };
 
@@ -333,7 +376,55 @@ main(
         }
     }
 
-    //alpaka::mem::view::ViewPlainPtr<DevHost, Data, Dim, Size> hostBufferA(plainBuffer.data(), devHost, extents);
+    BlockMultMatrixVector multMatricVectorKernel;
+
+    alpaka::mem::buf::Buf<DevAcc, Data, Dim, Size> deviceYBlock(alpaka::mem::buf::alloc<Data, Size>(devAcc, BS));
+    alpaka::mem::buf::Buf<DevAcc, Data, Dim, Size> deviceXBlock(alpaka::mem::buf::alloc<Data, Size>(devAcc, BS));
+    alpaka::mem::buf::Buf<DevAcc, Data, Dim, Size> deviceABlock(alpaka::mem::buf::alloc<Data, Size>(devAcc, BS * BS));
+
+    for (Size block_y = 0; block_y < NBS; block_y++) {
+        alpaka::mem::view::ViewPlainPtr<DevHost, Data, Dim, Size> hostYBlockPlain(&y[block_y * BS], devHost, BS);
+
+        /* copy y from host memory to device */
+        alpaka::mem::view::copy(stream, deviceYBlock, hostYBlockPlain, BS);
+
+        for (Size block_x = 0; block_x < NBS; block_x++) {
+            Size block_linear = block_y * NBS + block_x;
+
+            alpaka::mem::view::ViewPlainPtr<DevHost, Data, Dim, Size> hostABlockPlain(&A[block_linear * BS * BS], devHost, BS * BS);
+            alpaka::mem::view::ViewPlainPtr<DevHost, Data, Dim, Size> hostXBlockPlain(&x[block_x * BS], devHost, BS);
+
+            /* copy A from host memory to device */
+            alpaka::mem::view::copy(stream, deviceABlock, hostABlockPlain, BS * BS);
+            /* copy x from host memory to device */
+            alpaka::mem::view::copy(stream, deviceXBlock, hostXBlockPlain, BS);
+
+            auto const multMatrix(alpaka::exec::create<Acc>(
+                workdiv,
+                multMatricVectorKernel,
+                alpaka::mem::view::getPtrNative(deviceYBlock),
+                alpaka::mem::view::getPtrNative(deviceABlock),
+                alpaka::mem::view::getPtrNative(deviceXBlock),
+                BS));
+            alpaka::stream::enqueue(stream, multMatrix);
+        }
+
+        /* copy y from device back into host memory */
+        alpaka::mem::view::copy(stream, hostYBlockPlain, deviceYBlock, BS);
+
+        /* validate result */
+        for (Size local_y = 0; local_y < BS; local_y++) {
+            Size global_y = block_y * BS + local_y;
+            Data y_value = (global_y < N) ? (global_y * N * N + ((N * (N - 1)) / 2)) : 0.0;
+
+            if (alpaka::mem::view::getPtrNative(hostYBlockPlain)[local_y] != y_value)
+                printf("Y[%zu]: %f != %f\n", global_y, alpaka::mem::view::getPtrNative(hostYBlockPlain)[local_y], y_value);
+        }
+    }
+
+    delete[] A;
+    delete[] x;
+    delete[] y;
 
     /**
      * Everything is fine, so lets return :)
