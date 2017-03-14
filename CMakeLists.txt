@@ -2,7 +2,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 3.7.2)
 
 PROJECT(mephisto-tests)
 
-SET(ALPAKA_ROOT "$ENV{ALPAKA_ROOT}" CACHE STRING "The location of the alpaka library")
+SET(ALPAKA_ROOT "${CMAKE_CURRENT_LIST_DIR}/alpaka" CACHE STRING "The location of the alpaka library")
 LIST(APPEND CMAKE_MODULE_PATH "${ALPAKA_ROOT}")
 FIND_PACKAGE("alpaka" REQUIRED)
 
