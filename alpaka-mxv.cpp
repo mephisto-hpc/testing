@@ -290,8 +290,6 @@ main(
     HostInitBlockMatrix initMatrixKernel;
     HostInitBlockVector initVectorKernel;
 
-    Size nElementsPerDim = NBS;
-
     /* Create the matrix and vectors */
     Data *A = new Data[NS * NS];
     Data *x = new Data[NS];
@@ -382,6 +380,9 @@ main(
     alpaka::mem::buf::Buf<DevAcc, Data, Dim, Size> deviceXBlock(alpaka::mem::buf::alloc<Data, Size>(devAcc, BS));
     alpaka::mem::buf::Buf<DevAcc, Data, Dim, Size> deviceABlock(alpaka::mem::buf::alloc<Data, Size>(devAcc, BS * BS));
 
+    // Take the time prior to the execution.
+    auto const tpStart(std::chrono::high_resolution_clock::now());
+
     for (Size block_y = 0; block_y < NBS; block_y++) {
         alpaka::mem::view::ViewPlainPtr<DevHost, Data, Dim, Size> hostYBlockPlain(&y[block_y * BS], devHost, BS);
 
@@ -421,6 +422,12 @@ main(
                 printf("Y[%zu]: %f != %f\n", global_y, alpaka::mem::view::getPtrNative(hostYBlockPlain)[local_y], y_value);
         }
     }
+
+    // Take the time after the execution.
+    auto const tpEnd(std::chrono::high_resolution_clock::now());
+
+    auto const durElapsed(tpEnd - tpStart);
+    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(durElapsed).count() << std::endl;
 
     delete[] A;
     delete[] x;
