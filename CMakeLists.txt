@@ -7,7 +7,7 @@ LIST(APPEND CMAKE_MODULE_PATH "${ALPAKA_ROOT}")
 FIND_PACKAGE("alpaka" REQUIRED)
 
 INCLUDE("${ALPAKA_ROOT}/cmake/common.cmake")
-INCLUDE("${ALPAKA_ROOT}/cmake/dev.cmake")
+#INCLUDE("${ALPAKA_ROOT}/cmake/dev.cmake")
 
 IF(CMAKE_VERSION VERSION_LESS 3.7.0)
     INCLUDE_DIRECTORIES(
@@ -15,9 +15,17 @@ IF(CMAKE_VERSION VERSION_LESS 3.7.0)
     ADD_DEFINITIONS(
         ${alpaka_DEFINITIONS})
 ENDIF()
+
 ALPAKA_ADD_EXECUTABLE(
-    alpaka-mxv
-    "alpaka-mxv.cpp")
+    alpaka-mxv-cpu
+    "alpaka-mxv-cpu.cpp")
 TARGET_LINK_LIBRARIES(
-    alpaka-mxv
+    alpaka-mxv-cpu
+    PUBLIC "alpaka")
+
+ALPAKA_ADD_EXECUTABLE(
+    alpaka-mxv-gpu
+    "alpaka-mxv-gpu.cpp")
+TARGET_LINK_LIBRARIES(
+    alpaka-mxv-gpu
     PUBLIC "alpaka")
