@@ -1,2 +1,3 @@
-/alpaka-mxv
 /Makefile
+/alpaka-mxv-cpu
+/alpaka-mxv-gpu
