@@ -23,9 +23,11 @@ TARGET_LINK_LIBRARIES(
     alpaka-mxv-cpu
     PUBLIC "alpaka")
 
-ALPAKA_ADD_EXECUTABLE(
-    alpaka-mxv-gpu
-    "alpaka-mxv-gpu.cpp")
-TARGET_LINK_LIBRARIES(
-    alpaka-mxv-gpu
-    PUBLIC "alpaka")
+IF(ALPAKA_ACC_GPU_CUDA_ENABLE)
+    ALPAKA_ADD_EXECUTABLE(
+        alpaka-mxv-gpu
+        "alpaka-mxv-gpu.cpp")
+    TARGET_LINK_LIBRARIES(
+        alpaka-mxv-gpu
+        PUBLIC "alpaka")
+ENDIF()
