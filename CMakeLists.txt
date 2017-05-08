@@ -41,8 +41,7 @@ IF(MPI_CXX_FOUND)
 
     FIND_PATH(DASH_INCLUDE_PATH
         NAMES libdash.h
-        DOC "The path to DASH header files"
-    )
+        DOC "The path to DASH header files")
 
     FIND_LIBRARY(DASH_MPI_LIBRARY NAMES dash-mpi)
     FIND_LIBRARY(DART_MPI_LIBRARY NAMES dart-mpi)
@@ -53,16 +52,14 @@ IF(MPI_CXX_FOUND)
 
     ADD_EXECUTABLE(
         dash-mxv
-        "dash-mxv.cpp"
-    )
+        "dash-mxv.cpp")
     TARGET_INCLUDE_DIRECTORIES(
         dash-mxv
         PUBLIC
         "${MPI_CXX_INCLUDE_PATH}"
-        "${DASH_INCLUDE_PATH}"
-    )
+        "${DASH_INCLUDE_PATH}")
     TARGET_LINK_LIBRARIES(
         dash-mxv
-        "${MPI_CXX_LIBRARIES};${DASH_MPI_LIBRARY};${DART_MPI_LIBRARY};${DART_BASE_LIBRARY}"
-    )
+        "${MPI_CXX_LIBRARIES};${DASH_MPI_LIBRARY};${DART_MPI_LIBRARY};${DART_BASE_LIBRARY}")
+
 ENDIF()

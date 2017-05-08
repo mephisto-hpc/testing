@@ -6,13 +6,11 @@
 
 #include <libdash.h>
 
-using std::cout;
-using std::endl;
-using std::setw;
-
 template<class MatrixT>
-void print_matrix(const MatrixT & matrix) {
+void print_matrix(const MatrixT & matrix)
+{
   typedef typename MatrixT::value_type value_t;
+  auto& pattern = matrix.pattern();
   auto rows = matrix.extent(0);
   auto cols = matrix.extent(1);
 
@@ -25,26 +23,28 @@ void print_matrix(const MatrixT & matrix) {
   DASH_ASSERT(copy_end == matrix_copy + matrix.size());
   std::string first = "[";
   for (auto r = 0; r < rows; ++r) {
-    cout << first;
+    std::cout << first;
     for (auto c = 0; c < cols; ++c) {
-      cout << " " << setw(5) << matrix_copy[r * cols + c];
+      //std::cout << " " << std::setw(5) << matrix_copy[r * cols + c] << " # @" << pattern.unit_at({r,c}) << "\n";
+      std::cout << " " << std::setw(5) << matrix_copy[r * cols + c];
     }
-    cout << endl;
+    std::cout << std::endl;
     first = ";";
   }
-  cout << "]" << endl;
+  std::cout << "];" << std::endl;
   delete[] matrix_copy;
 }
 
 template<class VectorT>
-void print_vector(const VectorT & vector) {
+void print_vector(const VectorT & vector)
+{
     auto size = vector.size();
 
-    cout << "[";
+    std::cout << "[";
     for (auto i = 0; i < size; ++i) {
-        cout << " " << setw(5) << (double)vector[i];
+        std::cout << " " << std::setw(5) << (double)vector[i];
     }
-  cout << "\n]" << endl;
+    std::cout << "\n];" << std::endl;
 }
 
 template<typename T>
@@ -68,31 +68,31 @@ template<
   typename         IndexType>
 struct is_dash_tile_pattern<dash::TilePattern<NumDimensions, Arrangement, IndexType>> : std::true_type {};
 
-template<typename T>
-void product_tile_pattern(const dash::Matrix<T,2>& A,
-                          const dash::Array<T>&    x,
-                          dash::Array<T>&          y)
+template<typename Data>
+void product_tile_pattern(const dash::Matrix<Data,2>& A,
+                          const dash::Array<Data>&    x,
+                          dash::Array<Data>&          y)
 {
     if (A.size() <= 1024 && dash::myid() == 0) {
-        cout << A.pattern().blockspec() << endl;
-        cout << A.pattern().local_blockspec() << endl;
-        cout << A.pattern().distspec() << endl;
-        cout << A.pattern().sizespec() << endl;
+        std::cout << A.pattern().blockspec() << std::endl;
+        std::cout << A.pattern().local_blockspec() << std::endl;
+        std::cout << A.pattern().distspec() << std::endl;
+        std::cout << A.pattern().sizespec() << std::endl;
 
-        cout << "product using "
-             << A.extent(0) << "x" <<  A.extent(1)
-             << " (" << A.local.extent(0) << " x " << A.local.extent(1) << ")"
-             << " matrix " << endl;
+        std::cout << "product using "
+                  << A.extent(0) << "x" <<  A.extent(1)
+                  << " (" << A.local.extent(0) << " x " << A.local.extent(1) << ")"
+                  << " matrix " << std::endl;
     }
     auto& pattern = A.pattern();
-    static_assert(is_dash_tile_pattern<typename dash::Matrix<T,2>::pattern_type>::value,
+    static_assert(is_dash_tile_pattern<typename dash::Matrix<Data,2>::pattern_type>::value,
                   "This works only for TilePattern.");
 
     // local copy of x
-    std::vector<T> local_x(x.size());
+    std::vector<Data> local_x(x.size());
     dash::copy(x.begin(), x.end(), local_x.data());
     // local result space for y
-    std::vector<T> local_y(y.size(), 0.0);
+    std::vector<Data> local_y(y.size(), 0.0);
 
     auto lblocks = pattern.local_blockspec().size();
     for (size_t lblock_idx = 0; lblock_idx < lblocks; lblock_idx++ ) {
@@ -101,7 +101,7 @@ void product_tile_pattern(const dash::Matrix<T,2>& A,
 
         auto global_index = pattern.global(local_index);
         auto global_coords = pattern.coords(global_index);
-        //cout << dash::myid() << ": " << lblock_idx << " -> " << lblock_view << " : {0,0} -> " << local_index << " -> " << global_index << " -> {" << global_coords[0] << "," << global_coords[1] << "}" << endl;
+        //std::cout << dash::myid() << ": " << lblock_idx << " -> " << lblock_view << " : {0,0} -> " << local_index << " -> " << global_index << " -> {" << global_coords[0] << "," << global_coords[1] << "}" << std::endl;
 
         /* begin of the local block */
         auto *lblock_begin = A.lbegin() + local_index;
@@ -119,21 +119,48 @@ void product_tile_pattern(const dash::Matrix<T,2>& A,
 
     /* reduce local result vectors into global y vector */
     if (A.size() <= 1024) {
-        cout << dash::myid() << ": local Vector y size: " << local_y.size() << endl;
+        std::cout << dash::myid() << ": local Vector y size: " << local_y.size() << std::endl;
         print_vector(local_y);
     }
 
-    for (decltype(y.size()) i = 0; i < y.size(); ++i) {
-        y[i] += local_y[i];
+    auto& team = y.team();
+    auto team_size = team.size();
+    team.barrier();
+
+    dash::NArray<Data,2> result_matrix(
+        dash::SizeSpec<2>(
+            y.size(),
+            team_size),
+       dash::DistributionSpec<2>{},
+        team);
+    auto& result_pattern = result_matrix.pattern();
+
+    auto myid = team.myid();
+    for (decltype(local_y.size()) i = 0; i < local_y.size(); ++i) {
+        result_matrix[i][myid] = local_y[i];
     }
+    team.barrier();
+
+    for (auto r = 0; r < y.size(); ++r) {
+        const auto& coord = result_pattern.local({r,0});
+        if (coord.unit != myid)
+            continue;
+
+        Data sum = (Data)0;
+        for (decltype(team_size) c = 0; c < team_size; ++c) {
+            sum += result_matrix.local[coord.coords[0]][c];
+        }
+        y[r] = sum;
+    }
+    team.barrier();
 }
 
 int main(int argc, char* argv[])
 {
     dash::init(&argc, &argv);
 
-    dart_unit_t myid   = dash::myid();
-    size_t num_units   = dash::Team::All().size();
+    dart_unit_t myid = dash::myid();
+    size_t num_units = dash::Team::All().size();
 
     dash::TeamSpec<2> teamspec_2d(num_units, 1);
     teamspec_2d.balance_extents();
@@ -153,10 +180,10 @@ int main(int argc, char* argv[])
     size_t matrix_size = rows * cols;
 
     if (matrix_size <= 1024 && 0 == myid) {
-        cout << "Matrix size: " << rows
-           << " x " << cols
-           << " == " << matrix_size
-           << endl;
+        std::cout << "Matrix size: " << rows
+                  << " x " << cols
+                  << " == " << matrix_size
+                  << std::endl;
     }
 
     dash::Matrix<double, 2> matrix(
@@ -185,7 +212,7 @@ int main(int argc, char* argv[])
     if (matrix_size <= 1024 && 0 == myid) {
         print_matrix(matrix);
 
-        cout << "Vector x size: " << vector_x.size() << endl;
+        std::cout << "Vector x size: " << vector_x.size() << std::endl;
         print_vector(vector_x);
     }
 
@@ -203,7 +230,7 @@ int main(int argc, char* argv[])
     }
 
     if (matrix_size <= 1024 && 0 == myid) {
-        cout << "Vector y size: " << vector_y.size() << endl;
+        std::cout << "Vector y size: " << vector_y.size() << std::endl;
         print_vector(vector_y);
     }
 
