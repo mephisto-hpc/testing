@@ -4,6 +4,10 @@
 #include <iomanip>
 #include <chrono>
 
+#if HAVE_CBLAS
+#include <cblas.h>
+#endif
+
 #include <libdash.h>
 
 template<class MatrixT>
@@ -47,26 +51,50 @@ void print_vector(const VectorT & vector)
     std::cout << "\n];" << std::endl;
 }
 
+
+
 template<typename T>
-void product(T* y, const T* A, const T* x, int N, int M)
+void product(T* y, const T* A, const T* x, int M, int N)
 {
-    for (int n = 0; n < N; n++) {
+    for (int m = 0; m < M; m++) {
         T sum = (T)0;
-        for (int m = 0; m < M; m++) {
-            sum += A[n * M + m] * x[m];
+        for (int n = 0; n < N; n++) {
+            sum += A[m * N + n] * x[n];
         }
-        y[n] += sum;
+        y[m] += sum;
     }
 }
 
+#if HAVE_CBLAS
+template<>
+void product<double>(double* y, const double* A, const double* x, int M, int N)
+{
+    cblas_dgemv(CblasRowMajor, CblasNoTrans,
+                M, N,
+                1.0, A, 1,
+                x, 1, 0.0,
+                y, 1);
+}
+
+template<>
+void product<float>(float* y, const float* A, const float* x, int M, int N)
+{
+    cblas_sgemv(CblasRowMajor, CblasNoTrans,
+                M, N,
+                1.0, A, 1,
+                x, 1, 0.0,
+                y, 1);
+}
+#endif
+
 template<typename>
-struct is_dash_tile_pattern : std::false_type {};
+struct is_tile_pattern : std::false_type {};
 
 template<
   dash::dim_t      NumDimensions,
   dash::MemArrange Arrangement,
   typename         IndexType>
-struct is_dash_tile_pattern<dash::TilePattern<NumDimensions, Arrangement, IndexType>> : std::true_type {};
+struct is_tile_pattern<dash::TilePattern<NumDimensions, Arrangement, IndexType>> : std::true_type {};
 
 template<typename Data>
 void product_tile_pattern(const dash::Matrix<Data,2>& A,
@@ -85,7 +113,7 @@ void product_tile_pattern(const dash::Matrix<Data,2>& A,
                   << " matrix " << std::endl;
     }
     auto& pattern = A.pattern();
-    static_assert(is_dash_tile_pattern<typename dash::Matrix<Data,2>::pattern_type>::value,
+    static_assert(is_tile_pattern<typename dash::Matrix<Data,2>::pattern_type>::value,
                   "This works only for TilePattern.");
 
     // local copy of x
@@ -112,9 +140,9 @@ void product_tile_pattern(const dash::Matrix<Data,2>& A,
         /* begin of the local y */
         auto y_begin = local_y.data() + global_coords[0];
 
-        auto N = lblock_view.extent(0);
-        auto M = lblock_view.extent(1);
-        product(y_begin, lblock_begin, x_begin, N, M);
+        auto M = lblock_view.extent(0);
+        auto N = lblock_view.extent(1);
+        product(y_begin, lblock_begin, x_begin, M, N);
     }
 
     /* reduce local result vectors into global y vector */

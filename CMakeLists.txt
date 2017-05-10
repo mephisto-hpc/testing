@@ -39,6 +39,20 @@ FIND_PACKAGE(MPI)
 
 IF(MPI_CXX_FOUND)
 
+    FIND_PACKAGE(BLAS)
+    IF(BLAS_FOUND)
+        FIND_PATH(CBLAS_INCLUDE_PATH
+            NAMES cblas.h
+            DOC "The path to CBLAS header files")
+        IF(${CBLAS_INCLUDE_PATH} STREQUAL "")
+            set(BLAS_FOUND OFF CACHE BOOL "BLAS_FOUND" FORCE)
+        ELSE()
+            MESSAGE(STATUS "BLAS lib:      ${BLAS_LIBRARIES}")
+            MESSAGE(STATUS "CBLAS include: ${CBLAS_INCLUDE_PATH}")
+            ADD_DEFINITIONS("-DHAVE_CBLAS")
+        ENDIF()
+    ENDIF()
+
     FIND_PATH(DASH_INCLUDE_PATH
         NAMES libdash.h
         DOC "The path to DASH header files")
@@ -51,14 +65,14 @@ IF(MPI_CXX_FOUND)
     MESSAGE(STATUS "DASH: ${DASH_MPI_LIBRARY} ${DART_MPI_LIBRARY} ${DART_BASE_LIBRARY}")
 
     INCLUDE_DIRECTORIES(
-        "${MPI_CXX_INCLUDE_PATH};${DASH_INCLUDE_PATH}")
+        "${MPI_CXX_INCLUDE_PATH};${DASH_INCLUDE_PATH};${CBLAS_INCLUDE_PATH}")
 
     ADD_EXECUTABLE(
         dash-mxv
         "dash-mxv.cpp")
     TARGET_LINK_LIBRARIES(
         dash-mxv
-        "${MPI_CXX_LIBRARIES};${DASH_MPI_LIBRARY};${DART_MPI_LIBRARY};${DART_BASE_LIBRARY}")
+        "${MPI_CXX_LIBRARIES};${DASH_MPI_LIBRARY};${DART_MPI_LIBRARY};${DART_BASE_LIBRARY};${BLAS_LIBRARIES}")
 
     ALPAKA_ADD_EXECUTABLE(
         dash-alpaka-mxv-cpu

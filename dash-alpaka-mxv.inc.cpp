@@ -19,7 +19,7 @@ struct BlockMultMatrixVector
         TData * const y,
         TData * const A,
         TData * const x,
-        TSize M,
+        TSize N,
         TIndex beginY,
         TIndex beginX ) const
     -> void
@@ -32,8 +32,8 @@ struct BlockMultMatrixVector
             globalThreadExtent);
 
         TData prod = 0.0;
-        for (TSize local_x = 0; local_x < M; ++local_x) {
-            prod += A[linearizedGlobalThreadIdx[0u] * M + local_x] * x[beginX + local_x];
+        for (TSize local_x = 0; local_x < N; ++local_x) {
+            prod += A[linearizedGlobalThreadIdx[0u] * N + local_x] * x[beginX + local_x];
         }
         y[beginY + linearizedGlobalThreadIdx[0u]] += prod;
     }
@@ -167,17 +167,17 @@ void product_tile_pattern(const dash::Matrix<Data,2>& A,
         /* begin of the local block */
         auto *lblock_begin = A.lbegin() + local_index;
 
-        Size N = lblock_view.extent(0);
-        Size M = lblock_view.extent(1);
+        Size M = lblock_view.extent(0);
+        Size N = lblock_view.extent(1);
 
         /* copy A from host memory to device */
-        alpaka::mem::view::ViewPlainPtr<DevHost, const Data, Dim, Size> lblock_plain(lblock_begin, dev_host, N * M);
-        alpaka::mem::view::copy(stream_acc, device_a_block, lblock_plain, N * M);
+        alpaka::mem::view::ViewPlainPtr<DevHost, const Data, Dim, Size> lblock_plain(lblock_begin, dev_host, M * N);
+        alpaka::mem::view::copy(stream_acc, device_a_block, lblock_plain, M * N);
 
         WorkDiv const work_div_acc(
             alpaka::workdiv::getValidWorkDiv<Acc>(
                 dev_acc,
-                N,
+                M,
                 Size(1u),
                 false,
                 alpaka::workdiv::GridBlockExtentSubDivRestrictions::Unrestricted));
