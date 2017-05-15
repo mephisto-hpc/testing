@@ -72,14 +72,14 @@ IF(MPI_CXX_FOUND)
         "dash-mxv.cpp")
     TARGET_LINK_LIBRARIES(
         dash-mxv
-        "${MPI_CXX_LIBRARIES};${DASH_MPI_LIBRARY};${DART_MPI_LIBRARY};${DART_BASE_LIBRARY};${BLAS_LIBRARIES}")
+        "${DASH_MPI_LIBRARY};${DART_MPI_LIBRARY};${DART_BASE_LIBRARY};${BLAS_LIBRARIES};${MPI_CXX_LIBRARIES}")
 
     ALPAKA_ADD_EXECUTABLE(
         dash-alpaka-mxv-cpu
         "dash-alpaka-mxv-cpu.cpp")
     TARGET_LINK_LIBRARIES(
         dash-alpaka-mxv-cpu
-        PUBLIC "alpaka;${MPI_CXX_LIBRARIES};${DASH_MPI_LIBRARY};${DART_MPI_LIBRARY};${DART_BASE_LIBRARY}")
+        PUBLIC "alpaka;${DASH_MPI_LIBRARY};${DART_MPI_LIBRARY};${DART_BASE_LIBRARY};${MPI_CXX_LIBRARIES}")
 
     IF(ALPAKA_ACC_GPU_CUDA_ENABLE)
         ALPAKA_ADD_EXECUTABLE(
@@ -87,7 +87,7 @@ IF(MPI_CXX_FOUND)
             "dash-alpaka-mxv-gpu.cpp")
         TARGET_LINK_LIBRARIES(
             dash-alpaka-mxv-gpu
-            PUBLIC "alpaka;${MPI_CXX_LIBRARIES};${DASH_MPI_LIBRARY};${DART_MPI_LIBRARY};${DART_BASE_LIBRARY}")
+            PUBLIC "alpaka;${DASH_MPI_LIBRARY};${DART_MPI_LIBRARY};${DART_BASE_LIBRARY};${MPI_CXX_LIBRARIES}")
     ENDIF()
 
 ENDIF()
