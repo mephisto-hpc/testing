@@ -35,59 +35,48 @@ IF(ALPAKA_ACC_GPU_CUDA_ENABLE)
         PUBLIC "alpaka")
 ENDIF()
 
-FIND_PACKAGE(MPI)
-
-IF(MPI_CXX_FOUND)
-
-    FIND_PACKAGE(BLAS)
-    IF(BLAS_FOUND)
-        FIND_PATH(CBLAS_INCLUDE_PATH
-            NAMES cblas.h
-            DOC "The path to CBLAS header files")
-        IF(${CBLAS_INCLUDE_PATH} STREQUAL "")
-            set(BLAS_FOUND OFF CACHE BOOL "BLAS_FOUND" FORCE)
-        ELSE()
-            MESSAGE(STATUS "BLAS lib:      ${BLAS_LIBRARIES}")
-            MESSAGE(STATUS "CBLAS include: ${CBLAS_INCLUDE_PATH}")
-            ADD_DEFINITIONS("-DHAVE_CBLAS")
-        ENDIF()
+FIND_PACKAGE(BLAS)
+IF(BLAS_FOUND)
+    FIND_PATH(CBLAS_INCLUDE_PATH
+        NAMES cblas.h
+        DOC "The path to CBLAS header files")
+    IF(${CBLAS_INCLUDE_PATH} STREQUAL "")
+        set(BLAS_FOUND OFF CACHE BOOL "BLAS_FOUND" FORCE)
+    ELSE()
+        MESSAGE(STATUS "BLAS lib:      ${BLAS_LIBRARIES}")
+        MESSAGE(STATUS "CBLAS include: ${CBLAS_INCLUDE_PATH}")
+        ADD_DEFINITIONS("-DHAVE_CBLAS")
     ENDIF()
+ENDIF()
 
-    FIND_PATH(DASH_INCLUDE_PATH
-        NAMES libdash.h
-        DOC "The path to DASH header files")
+FIND_PACKAGE(dash-mpi)
+get_property(DASH_INCLUDES TARGET dash-mpi PROPERTY INTERFACE_INCLUDE_DIRECTORIES)
+get_property(DASH_LIBRARIES TARGET dash-mpi PROPERTY IMPORTED_LINK_INTERFACE_LIBRARIES_DEBUG)
+message(STATUS "dash-mpi: DASH_INCLUDES=${DASH_INCLUDES}")
+message(STATUS "dash-mpi: DASH_LIBRARIES=${DASH_LIBRARIES}")
 
-    FIND_LIBRARY(DASH_MPI_LIBRARY NAMES dash-mpi)
-    FIND_LIBRARY(DART_MPI_LIBRARY NAMES dart-mpi)
-    FIND_LIBRARY(DART_BASE_LIBRARY NAMES dart-base)
+INCLUDE_DIRECTORIES(
+    "${DASH_INCLUDES};${CBLAS_INCLUDE_PATH}")
 
-    MESSAGE(STATUS "DASH: ${DASH_INCLUDE_PATH}")
-    MESSAGE(STATUS "DASH: ${DASH_MPI_LIBRARY} ${DART_MPI_LIBRARY} ${DART_BASE_LIBRARY}")
+ADD_EXECUTABLE(
+    dash-mxv
+    "dash-mxv.cpp")
+TARGET_LINK_LIBRARIES(
+    dash-mxv
+    "dash-mpi;dart-mpi;${DASH_LIBRARIES};${BLAS_LIBRARIES}")
 
-    INCLUDE_DIRECTORIES(
-        "${MPI_CXX_INCLUDE_PATH};${DASH_INCLUDE_PATH};${CBLAS_INCLUDE_PATH}")
+ALPAKA_ADD_EXECUTABLE(
+    dash-alpaka-mxv-cpu
+    "dash-alpaka-mxv-cpu.cpp")
+TARGET_LINK_LIBRARIES(
+    dash-alpaka-mxv-cpu
+    PUBLIC "dash-mpi;dart-mpi;${DASH_LIBRARIES};alpaka")
 
-    ADD_EXECUTABLE(
-        dash-mxv
-        "dash-mxv.cpp")
-    TARGET_LINK_LIBRARIES(
-        dash-mxv
-        "${DASH_MPI_LIBRARY};${DART_MPI_LIBRARY};${DART_BASE_LIBRARY};${BLAS_LIBRARIES};${MPI_CXX_LIBRARIES}")
-
+IF(ALPAKA_ACC_GPU_CUDA_ENABLE)
     ALPAKA_ADD_EXECUTABLE(
-        dash-alpaka-mxv-cpu
-        "dash-alpaka-mxv-cpu.cpp")
+        dash-alpaka-mxv-gpu
+        "dash-alpaka-mxv-gpu.cpp")
     TARGET_LINK_LIBRARIES(
-        dash-alpaka-mxv-cpu
-        PUBLIC "alpaka;${DASH_MPI_LIBRARY};${DART_MPI_LIBRARY};${DART_BASE_LIBRARY};${MPI_CXX_LIBRARIES}")
-
-    IF(ALPAKA_ACC_GPU_CUDA_ENABLE)
-        ALPAKA_ADD_EXECUTABLE(
-            dash-alpaka-mxv-gpu
-            "dash-alpaka-mxv-gpu.cpp")
-        TARGET_LINK_LIBRARIES(
-            dash-alpaka-mxv-gpu
-            PUBLIC "alpaka;${DASH_MPI_LIBRARY};${DART_MPI_LIBRARY};${DART_BASE_LIBRARY};${MPI_CXX_LIBRARIES}")
-    ENDIF()
-
+        dash-alpaka-mxv-gpu
+        PUBLIC "dash-mpi;dart-mpi;${DASH_LIBRARIES};alpaka")
 ENDIF()
