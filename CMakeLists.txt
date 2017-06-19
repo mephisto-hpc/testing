@@ -41,6 +41,19 @@ IF(BLAS_FOUND)
         NAMES cblas.h
         DOC "The path to CBLAS header files")
     IF(${CBLAS_INCLUDE_PATH} STREQUAL "")
+    IF("${CBLAS_INCLUDE_PATH}" STREQUAL "CBLAS_INCLUDE_PATH-NOTFOUND")
+        unset(CBLAS_INCLUDE_PATH)
+        FIND_PATH(CBLAS_INCLUDE_PATH
+            NAMES mkl_cblas.h
+            HINTS $ENV{MKL_INC}
+            DOC "The path to CBLAS header files")
+        IF(NOT "${CBLAS_INCLUDE_PATH}" STREQUAL "CBLAS_INCLUDE_PATH-NOTFOUND")
+            ADD_DEFINITIONS("-DHAVE_MKL_CBLAS")
+        ENDIF()
+    ELSE()
+        ADD_DEFINITIONS("-DHAVE_CBLAS")
+    ENDIF()
+    IF("${CBLAS_INCLUDE_PATH}" STREQUAL "CBLAS_INCLUDE_PATH-NOTFOUND")
         set(BLAS_FOUND OFF CACHE BOOL "BLAS_FOUND" FORCE)
     ELSE()
         MESSAGE(STATUS "BLAS lib:      ${BLAS_LIBRARIES}")
@@ -56,14 +69,22 @@ message(STATUS "dash-mpi: DASH_INCLUDES=${DASH_INCLUDES}")
 message(STATUS "dash-mpi: DASH_LIBRARIES=${DASH_LIBRARIES}")
 
 INCLUDE_DIRECTORIES(
-    "${DASH_INCLUDES};${CBLAS_INCLUDE_PATH}")
+    "${DASH_INCLUDES}")
+if(BLAS_FOUND)
+    INCLUDE_DIRECTORIES("${CBLAS_INCLUDE_PATH}")
+endif()
 
 ADD_EXECUTABLE(
     dash-mxv
     "dash-mxv.cpp")
 TARGET_LINK_LIBRARIES(
     dash-mxv
-    "dash-mpi;dart-mpi;${DASH_LIBRARIES};${BLAS_LIBRARIES}")
+    "dash-mpi;dart-mpi;${DASH_LIBRARIES}")
+if(BLAS_FOUND)
+    TARGET_LINK_LIBRARIES(
+        dash-mxv
+        "${BLAS_LIBRARIES}")
+endif()
 
 ALPAKA_ADD_EXECUTABLE(
     dash-alpaka-mxv-cpu

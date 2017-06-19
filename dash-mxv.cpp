@@ -4,11 +4,13 @@
 #include <iomanip>
 #include <chrono>
 
-#if HAVE_CBLAS
+#include <libdash.h>
+
+#if defined(HAVE_MKL_CBLAS)
+#include <mkl_cblas.h>
+#elif defined(HAVE_CBLAS)
 #include <cblas.h>
 #endif
-
-#include <libdash.h>
 
 template<class MatrixT>
 void print_matrix(const MatrixT & matrix)
@@ -65,7 +67,7 @@ void product(T* y, const T* A, const T* x, int M, int N)
     }
 }
 
-#if HAVE_CBLAS
+#if defined(HAVE_CBLAS) || defined(MKL_HAVE_CBLAS)
 template<>
 void product<double>(double* y, const double* A, const double* x, int M, int N)
 {
