@@ -418,7 +418,7 @@ main(
     auto const tpEnd(std::chrono::high_resolution_clock::now());
 
     auto const durElapsed(tpEnd - tpStart);
-    std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(durElapsed).count() << std::endl;
+    std::cout << std::chrono::duration_cast<std::chrono::microseconds>(durElapsed).count() << std::endl;
 #endif
     delete[] A;
     delete[] x;

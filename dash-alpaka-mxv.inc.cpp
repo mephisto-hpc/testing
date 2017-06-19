@@ -304,7 +304,7 @@ int main(int argc, char* argv[])
 
     auto const durElapsed(tpEnd - tpStart);
     if (0 == myid) {
-        std::cout << matrix_size << " " << std::chrono::duration_cast<std::chrono::milliseconds>(durElapsed).count() << std::endl;
+        std::cout << matrix_size << " " << std::chrono::duration_cast<std::chrono::microseconds>(durElapsed).count() << std::endl;
     }
 
     if (matrix_size <= 1024 && 0 == myid) {
