@@ -73,8 +73,8 @@ void product<double>(double* y, const double* A, const double* x, int M, int N)
 {
     cblas_dgemv(CblasRowMajor, CblasNoTrans,
                 M, N,
-                1.0, A, 1,
-                x, 1, 0.0,
+                1.0, A, M,
+                x, 1, 1.0,
                 y, 1);
 }
 
@@ -83,8 +83,8 @@ void product<float>(float* y, const float* A, const float* x, int M, int N)
 {
     cblas_sgemv(CblasRowMajor, CblasNoTrans,
                 M, N,
-                1.0, A, 1,
-                x, 1, 0.0,
+                1.0, A, M,
+                x, 1, 1.0,
                 y, 1);
 }
 #endif
@@ -256,7 +256,7 @@ int main(int argc, char* argv[])
 
     auto const durElapsed(tpEnd - tpStart);
     if (0 == myid) {
-        std::cout << matrix_size << " " << std::chrono::duration_cast<std::chrono::microseconds>(durElapsed).count() << std::endl;
+        std::cout << rows << " " << cols << " " << std::chrono::duration_cast<std::chrono::microseconds>(durElapsed).count() << std::endl;
     }
 
     if (matrix_size <= 1024 && 0 == myid) {
