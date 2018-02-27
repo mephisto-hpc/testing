@@ -1,6 +1,7 @@
 #include <iostream>
 #include <sstream>
 #include <chrono>
+#include <cassert>
 
 //#include <libdash.h>
 #include <alpaka/alpaka.hpp>
@@ -110,8 +111,33 @@ struct HostInitBlockVector
 
 /**
  */
+template<
+    int TThreads>
 struct BlockMultMatrixVector
 {
+    template<
+        typename TType,
+        size_t TSize>
+    struct Array {
+        template<
+            typename TIdx>
+        ALPAKA_FN_HOST_ACC const TType &operator[](
+            const TIdx idx) const
+        {
+            return m_data[idx];
+        }
+
+        template<
+            typename TIdx>
+        ALPAKA_FN_HOST_ACC TType & operator[](
+            const TIdx idx)
+        {
+            return m_data[idx];
+        }
+    private:
+        TType m_data[TSize];
+    };
+
     template<
         typename TAcc,
         typename TData,
@@ -124,30 +150,31 @@ struct BlockMultMatrixVector
         TSize BS ) const
     -> void
     {
-        /**
-         * In the most cases the parallel work distibution depends
-         * on the current index of a thread and how many threads
-         * exist overall. These information can be obtained by
-         * getIdx() and getWorkDiv(). In this example these
-         * values are obtained for a global scope.
-         */
         auto const globalThreadIdx = alpaka::idx::getIdx<alpaka::Grid, alpaka::Threads>(acc);
         auto const globalThreadExtent = alpaka::workdiv::getWorkDiv<alpaka::Grid, alpaka::Threads>(acc);
 
-        /**
-         * Map the three dimensional thread index into a
-         * one dimensional thread index space. We call it
-         * linearize the thread index.
-         */
-        auto const linearizedGlobalThreadIdx = alpaka::idx::mapIdx<1u>(
-            globalThreadIdx,
-            globalThreadExtent);
+        auto const thread_idx = globalThreadIdx[0u];
+        auto threads = globalThreadExtent[0u];
+        assert(TThreads == threads);
 
-        TData prod = 0.0;
-        for (TSize local_x = 0; local_x < BS; ++local_x) {
-            prod += A[linearizedGlobalThreadIdx[0u] * BS + local_x] * x[local_x];
+        auto && prod = alpaka::block::shared::st::allocVar<Array<TData, TThreads>, 0>(acc);
+
+        prod[thread_idx] = 0.0;
+        for (auto i = thread_idx; i < BS; i += TThreads) {
+            prod[thread_idx] += A[i] * x[i];
         }
-        y[linearizedGlobalThreadIdx[0u]] += prod;
+        alpaka::block::sync::syncBlockThreads(acc);
+
+        while (threads > 1) {
+            threads /= 2;
+            if (thread_idx < threads) {
+                prod[thread_idx] += prod[thread_idx + threads];
+            }
+            alpaka::block::sync::syncBlockThreads(acc);
+        }
+        if (thread_idx == 0) {
+            *y += prod[0];
+        }
     }
 };
 
@@ -191,7 +218,12 @@ main(
     using Acc = alpaka::acc::AccGpuCudaRt<Dim, Size>;
     using StreamAcc = alpaka::stream::StreamCudaRtSync;
 #else
+//#define USE_OMP_2_THREADS
+#ifdef USE_OMP_2_THREADS
+    using Acc = alpaka::acc::AccCpuOmp2Threads<Dim, Size>;
+#else
     using Acc = alpaka::acc::AccCpuOmp2Blocks<Dim, Size>;
+#endif
     using StreamAcc = alpaka::stream::StreamCpuSync;
 #endif
     using DevAcc = alpaka::dev::Dev<Acc>;
@@ -237,10 +269,20 @@ main(
             false,
             alpaka::workdiv::GridBlockExtentSubDivRestrictions::Unrestricted));
 
+#ifdef USE_GPU
+    constexpr Size CS(32);
+#else
+#ifdef USE_OMP_2_THREADS
+    constexpr Size CS(4);
+#else
+    constexpr Size CS(1);
+#endif
+#endif
+
     WorkDiv const workDivAcc(
         alpaka::workdiv::getValidWorkDiv<Acc>(
             devAcc,
-            BS,
+            CS,
             Size(1u),
             false,
             alpaka::workdiv::GridBlockExtentSubDivRestrictions::Unrestricted));
@@ -363,7 +405,7 @@ main(
     }
 
 #if 1
-    BlockMultMatrixVector multMatricVectorKernel;
+    BlockMultMatrixVector<CS> multMatricVectorKernel;
 
     alpaka::mem::buf::Buf<DevAcc, Data, Dim, Size> deviceYBlock(alpaka::mem::buf::alloc<Data, Size>(devAcc, BS));
     alpaka::mem::buf::Buf<DevAcc, Data, Dim, Size> deviceXBlock(alpaka::mem::buf::alloc<Data, Size>(devAcc, BS));
@@ -389,14 +431,17 @@ main(
             /* copy x from host memory to device */
             alpaka::mem::view::copy(streamAcc, deviceXBlock, hostXBlockPlain, BS);
 
-            auto const multMatrix(alpaka::exec::create<Acc>(
-                workDivAcc,
-                multMatricVectorKernel,
-                alpaka::mem::view::getPtrNative(deviceYBlock),
-                alpaka::mem::view::getPtrNative(deviceABlock),
-                alpaka::mem::view::getPtrNative(deviceXBlock),
-                BS));
-            alpaka::stream::enqueue(streamAcc, multMatrix);
+            for (Size block_r = 0; block_r < BS; block_r++) {
+
+                auto const multMatrix(alpaka::exec::create<Acc>(
+                    workDivAcc,
+                    multMatricVectorKernel,
+                    alpaka::mem::view::getPtrNative(deviceYBlock) + block_r,
+                    alpaka::mem::view::getPtrNative(deviceABlock) + block_r * BS,
+                    alpaka::mem::view::getPtrNative(deviceXBlock),
+                    BS));
+                alpaka::stream::enqueue(streamAcc, multMatrix);
+            }
         }
 
         /* copy y from device back into host memory */
@@ -418,7 +463,7 @@ main(
     auto const tpEnd(std::chrono::high_resolution_clock::now());
 
     auto const durElapsed(tpEnd - tpStart);
-    std::cout << std::chrono::duration_cast<std::chrono::microseconds>(durElapsed).count() << std::endl;
+    std::cout << ((double)N * N)/(double)std::chrono::duration_cast<std::chrono::microseconds>(durElapsed).count() << std::endl;
 #endif
     delete[] A;
     delete[] x;
