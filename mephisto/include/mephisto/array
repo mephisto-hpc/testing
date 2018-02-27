@@ -1,0 +1,39 @@
+#include <alpaka/alpaka.hpp>
+
+namespace mephisto
+{
+
+template<
+    typename TType,
+    size_t TSize
+>
+struct array
+{
+    TType m_data[TSize];
+
+    template<
+        typename TIdx
+    >
+    ALPAKA_FN_HOST_ACC const TType &
+    operator[](const TIdx idx) const noexcept {
+        return m_data[idx];
+    }
+
+    template<
+        typename TIdx
+    >
+    ALPAKA_FN_HOST_ACC TType &
+    operator[](const TIdx idx) noexcept {
+        return m_data[idx];
+    }
+
+    constexpr
+    ALPAKA_FN_HOST_ACC size_t
+    size() const { return TSize; }
+
+    constexpr
+    ALPAKA_FN_HOST_ACC bool
+    empty() const noexcept { return size() == 0; }
+};
+
+}
