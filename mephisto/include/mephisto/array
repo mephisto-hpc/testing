@@ -11,6 +11,29 @@ struct array
 {
     TType m_data[TSize];
 
+    template <
+        typename InputT>
+    array(InputT inputArr) {
+        size_t i = 0;
+        for (auto extent : inputArr) {
+            m_data[i++] = inputArr[i];
+        }
+    }
+
+    array() = default;
+
+    array(array<TType, TSize> &) = default;
+
+    array(array<TType, TSize> &&) = default;
+
+    array(std::initializer_list<TType> ilist) {
+        size_t i = 0;
+        for(auto extent : ilist) {
+            m_data[i++] = extent;
+        }
+    }
+
+
     template<
         typename TIdx
     >
