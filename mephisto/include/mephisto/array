@@ -14,6 +14,7 @@ struct array
     template<
         typename TIdx
     >
+    constexpr
     ALPAKA_FN_HOST_ACC const TType &
     operator[](const TIdx idx) const noexcept {
         return m_data[idx];
