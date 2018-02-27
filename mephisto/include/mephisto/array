@@ -16,7 +16,7 @@ struct array
     array(InputT inputArr) {
         size_t i = 0;
         for (auto extent : inputArr) {
-            m_data[i++] = inputArr[i];
+            m_data[i++] = extent;
         }
     }
 
