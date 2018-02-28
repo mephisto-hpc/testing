@@ -1,0 +1,63 @@
+namespace mephisto {
+namespace detail {
+
+/**
+ * Information about a local chunk of memory and its coordinates relative to
+ * the global origin.
+ */
+template <
+    typename OffsetT,
+    typename ExtentsT>
+struct Metadata {
+    // Offset at first element
+    OffsetT  offset;
+    // Extents of the chunk
+    ExtentsT localExtents;
+    size_t chunk_size;
+
+    Metadata(OffsetT offset, ExtentsT localExtents) : offset(offset), localExtents(localExtents) {
+        // Calculate the chunk size once
+        chunk_size = 1;
+        for(auto i : localExtents) {
+            chunk_size *= i;
+        }
+    }
+
+    template<
+        typename IndexT>
+    ALPAKA_FN_HOST_ACC IndexT global_coords(OffsetT localOffset) {
+    }
+};
+
+/**
+ * Data buffer is used to reduce the number of parameters to avoid hitting the 256 byte
+ * limit. The data is aligned to Alignment after the struct.
+ *
+ * [DataBuffer [meta][*data]]<alignment>[data] ....
+ */
+template <
+    typename ElementT,
+    typename MetaT,
+    typename Device,
+    typename Alignment =
+        typename alpaka::core::align::OptimalAlignment<sizeof(ElementT)>::type>
+struct DataBuffer {
+    typedef DataBuffer<ElementT, MetaT, Alignment> self_t;
+
+    MetaT  meta;
+    ElementT *data;
+
+
+    DataBuffer(MetaT meta) : meta(meta) {
+        data = this + sizeof(self_t) + (this + (sizeof(self_t)) % Alignment::value);
+    }
+ 
+    void set(ElementT *) {
+
+    }
+
+    void get(ElementT *) {
+    }
+};
+}
+}
