@@ -1,4 +1,8 @@
+#ifndef MEPHISTO_ARRAY
+#define MEPHISTO_ARRAY
+
 #include <alpaka/alpaka.hpp>
+#include <initializer_list>
 
 namespace mephisto
 {
@@ -61,3 +65,4 @@ struct array
 };
 
 }
+#endif
