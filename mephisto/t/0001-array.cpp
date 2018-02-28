@@ -10,8 +10,8 @@ main()
     arr3[1] = 1;
     arr3[2] = 2;
 
-    static_assert(arr3.size() == 3);
-    static_assert(!arr3.empty());
+    static_assert(arr3.size() == 3, "Size needs to be 3");
+    static_assert(!arr3.empty(), "Array shall not be empty" );
     assert(arr3[0] == 0);
     assert(arr3[1] == 1);
     assert(arr3[2] == 2);
