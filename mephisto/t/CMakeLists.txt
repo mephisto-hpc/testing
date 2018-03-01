@@ -29,9 +29,12 @@ ALPAKA_ADD_EXECUTABLE(
 TARGET_LINK_LIBRARIES(
     0001-array
     PUBLIC "alpaka")
-ALPAKA_ADD_EXECUTABLE(
-    0002-foreach
-    "0002-foreach.cpp")
-TARGET_LINK_LIBRARIES(
-    0002-foreach
-    PUBLIC "alpaka;${DASH_LIBRARIES}")
+
+IF(DASH-MPI_FOUND)
+    ALPAKA_ADD_EXECUTABLE(
+        0002-foreach
+        "0002-foreach.cpp")
+    TARGET_LINK_LIBRARIES(
+        0002-foreach
+        PUBLIC "alpaka;${DASH_LIBRARIES}")
+ENDIF()
