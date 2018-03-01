@@ -1,0 +1,15 @@
+#ifndef MEPHISTO_COPY
+#define MEPHISTO_COPY
+
+
+namespace mephisto {
+
+template<
+    typename InputT,
+    typename OutputT>
+OutputT copy(InputT inIterFirst, InputT, inIterLast, OutputT outIter) {
+}
+
+}
+
+#endif

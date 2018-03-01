@@ -1,3 +1,7 @@
+#ifndef MEPHISTO_DETAIL_META
+#define MEPHISTO_DETAIL_META
+#include <mephisto/algorithm/copy>
+
 namespace mephisto {
 namespace detail {
 
@@ -6,9 +10,11 @@ namespace detail {
  * the global origin.
  */
 template <
-    typename OffsetT,
-    typename ExtentsT>
+    typename PatternT>
 struct Metadata {
+    typedef typename PatternT::index_type OffsetT;
+    typedef typename PatternT::size_type ExtentsT;
+
     // Offset at first element
     OffsetT  offset;
     // Extents of the chunk
@@ -31,33 +37,47 @@ struct Metadata {
 
 /**
  * Data buffer is used to reduce the number of parameters to avoid hitting the 256 byte
- * limit. The data is aligned to Alignment after the struct.
+ * limit.
  *
- * [DataBuffer [meta][*data]]<alignment>[data] ....
+ * buf[[meta]..<padding>..[data...]]
+ *  
  */
 template <
     typename ElementT,
+    typename DeviceT,
     typename MetaT,
-    typename Device,
     typename Alignment =
         typename alpaka::core::align::OptimalAlignment<sizeof(ElementT)>::type>
 struct DataBuffer {
-    typedef DataBuffer<ElementT, MetaT, Alignment> self_t;
+    static constexpr size_t MetaOffset = sizeof(MetaT) + sizeof(MetaT) % Alignment::value;
 
-    MetaT  meta;
-    ElementT *data;
+    char *data;
 
+    template<
+        typename ViewT>
+    DataBuffer(DeviceT dev, ViewT &view) {
+        auto bufsize = sizeof(MetaT) + view.size() * sizeof(ElementT) + Alignment::value;
+        auto alpakaBuf = alpaka::mem::buf::alloc<char, decltype(bufsize)>(dev, bufsize);
+        auto buf = alpaka::mem::view::getPtrNative(alpakaBuf);
 
-    DataBuffer(MetaT meta) : meta(meta) {
-        data = this + sizeof(self_t) + (this + (sizeof(self_t)) % Alignment::value);
+        data = buf + MetaOffset;
+
+        new (buf) MetaT(view.pattern().global(view.lbegin()), view.pattern().extents()); 
+
+        mephisto::copy(view, data);
     }
- 
-    void set(ElementT *) {
-
+    MetaT& getMeta() {
+        return reinterpret_cast<MetaT>(data - MetaOffset);
     }
 
-    void get(ElementT *) {
+
+    ElementT *getData() {
+        return data;
     }
+
+    // dtor needs device?
 };
 }
 }
+
+#endif

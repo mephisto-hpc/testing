@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.7)
 
 PROJECT(tests)
 
-SET(CMAKE_CXX_STANDARD 11)
+SET(CMAKE_CXX_STANDARD 14)
 SET(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 SET(ALPAKA_ROOT "${CMAKE_CURRENT_LIST_DIR}/../../alpaka" CACHE STRING "The location of the alpaka library")
@@ -33,7 +33,4 @@ ALPAKA_ADD_EXECUTABLE(
     "0002-foreach.cpp")
 TARGET_LINK_LIBRARIES(
     0002-foreach
-    PUBLIC "alpaka")
-TARGET_LINK_LIBRARIES(
-    0002-foreach
-    PUBLIC ${DASH_LIBRARIES})
+    PUBLIC "alpaka;${DASH_LIBRARIES}")
