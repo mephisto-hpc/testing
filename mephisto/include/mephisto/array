@@ -18,7 +18,7 @@ struct array
     template<
         typename TInput
     >
-    ALPAKA_FN_HOST_ACC
+    ALPAKA_FN_HOST
     array(TInput inputArr) {
         size_t i = 0;
         for (auto extent : inputArr) {
@@ -26,13 +26,10 @@ struct array
         }
     }
 
-    ALPAKA_FN_HOST_ACC
     array() = default;
 
-    ALPAKA_FN_HOST_ACC
     array(array<TType, TSize> &) = default;
 
-    ALPAKA_FN_HOST_ACC
     array(array<TType, TSize> &&) = default;
 
     ALPAKA_FN_HOST_ACC
