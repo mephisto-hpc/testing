@@ -1,8 +1,5 @@
 #ifndef MEPHISTO_ALGORITHM_FOR_EACH
 #define MEPHISTO_ALGORITHM_FOR_EACH
-#include <mephisto/detail/meta>
-#include <iterator>
-#include <alpaka/alpaka.hpp>
 
 namespace mephisto {
 
@@ -15,12 +12,6 @@ template <
         IterT last,
         UnaryFunction f) {
 
-        // using Acc = alpaka::acc::AccGpuCudaRt
-        // using DevAcc = alpaka::dev::Dev<Acc>;
-
-        size_t nelems = std::distance(first, last);
-
-        // .. allocate DataBuffer and set
     }
 
 }

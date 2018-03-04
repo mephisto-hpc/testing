@@ -1,0 +1,19 @@
+#ifndef MEPHISTO_TYPE_TRAITS
+#define MEPHISTO_TYPE_TRAITS
+
+namespace mephisto {
+
+struct UnknownDevice;
+struct HostDevice;
+struct AccDevice;
+
+template<
+    typename Buf>
+struct buf_traits
+{
+    using DeviceType = UnknownDevice;
+};
+
+}
+
+#endif

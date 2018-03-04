@@ -1,0 +1,188 @@
+#ifndef MEPHISTO_DETAIL_META
+#define MEPHISTO_DETAIL_META
+#include <alpaka/alpaka.hpp>
+
+#include <mephisto/array>
+#include <mephisto/type_traits>
+#include <type_traits>
+
+#include <iostream>
+
+namespace mephisto {
+
+/**
+ * The context of a buffer.
+ *
+ * This is mainly a pair of host and accelerator and can be used to specialize
+ * copy operations etc.
+ *
+ * @tparam HostT The host type of the buffer
+ * @tparam DeviceT The accelerator type this buffer is used for
+ */
+template <
+  typename HostT,
+  typename DeviceT>
+struct Context {
+  using host_t = typename std::remove_cv<HostT>::type;
+  using device_t = typename std::remove_cv<DeviceT>::type;
+
+  HostT &hostDev;
+  DeviceT &accDev;
+
+  Context(HostT &hostDev, DeviceT &accDev) : hostDev(hostDev), accDev(accDev) {}
+};
+
+/**
+ * Create context from host and device/accelerator
+ *
+ */
+template <
+  typename HostT,
+  typename DeviceT>
+auto make_ctx(HostT &host, DeviceT &device) {
+  return Context<HostT, DeviceT>(host, device);
+};
+
+/**
+ * Information about a local chunk of memory and its coordinates relative to
+ * the global origin.
+ */
+template <
+    typename PatternT>
+struct Metadata {
+    static constexpr int NDim = PatternT::ndim();
+
+    using OffsetT = typename PatternT::index_type;
+    using ExtentT = typename PatternT::size_type;
+    using OffsetsT = mephisto::array<OffsetT, NDim>;
+    using ExtentsT = mephisto::array<ExtentT, NDim>;
+
+    // Offset at first element
+    OffsetsT offsets;
+    ExtentsT localExtents;
+    size_t chunk_size;
+
+    Metadata(OffsetsT offsets, ExtentsT localExtents) : offsets(offsets), localExtents(localExtents) {
+        // Calculate the chunk size once
+        chunk_size = 1;
+        for(auto i : localExtents) {
+            chunk_size *= i;
+        }
+    }
+
+    // TODO: remove
+    Metadata() : offsets({}), localExtents({}) {}
+
+    template<
+        typename IndexT>
+    ALPAKA_FN_HOST_ACC
+    OffsetsT
+    global_coords(OffsetT localOffset) {
+        // calculate the global coordinates from the local
+    }
+};
+
+
+template <
+    typename ElementT,
+    typename DeviceT,
+    typename MetaT,
+    typename Alignment =
+        typename alpaka::core::align::OptimalAlignment<sizeof(ElementT)>::type>
+struct DeviceDataBuffer {
+
+    static constexpr size_t MetaOffset = sizeof(MetaT) + sizeof(MetaT) % Alignment::value;
+
+    char *data;
+
+    DeviceDataBuffer(char *data) : data(data) {}
+
+    ALPAKA_FN_HOST_ACC
+    const MetaT& getMeta() const {
+        return reinterpret_cast<MetaT>(data - MetaOffset);
+    }
+
+    ALPAKA_FN_HOST_ACC
+    ElementT *getData() const {
+        return data;
+    }
+};
+
+/**
+ * Data buffer is used to reduce the number of parameters to avoid hitting the 256 byte
+ * limit.
+ *
+ * buf[[meta]..<padding>..[data...]]
+ *
+ */
+template <
+    typename ElementT,
+    typename ContextT,
+    typename PatternT,
+    typename ViewT,
+    typename Alignment =
+        typename alpaka::core::align::OptimalAlignment<sizeof(ElementT)>::type>
+struct HostDataBuffer {
+    using HostT       = typename ContextT::host_t;
+    using DeviceT     = typename ContextT::device_t;
+    using MetaT       = Metadata<PatternT>;
+    using DeviceBufT  = DeviceDataBuffer<ElementT, DeviceT, MetaT, Alignment>;
+    using DimT        = alpaka::dim::DimInt<1>;
+
+    static constexpr size_t MetaOffset = sizeof(MetaT) + sizeof(MetaT) % Alignment::value;
+
+    ContextT &context;
+    ViewT &view;
+  std::size_t bufsize;
+  std::size_t datasize;
+    alpaka::mem::buf::Buf<
+      HostT,
+      ElementT,
+      DimT,
+      std::size_t> deviceBuf;
+    alpaka::mem::view::ViewPlainPtr<
+      HostT,
+      ElementT,
+      DimT,
+      std::size_t> hostBuf;
+    Metadata<PatternT> meta;
+
+    HostDataBuffer(ContextT context, ViewT &view)
+        : context(context),
+          view(view),
+          bufsize(sizeof(MetaT) + view.size() * sizeof(ElementT) + Alignment::value),
+          datasize(view.size() * sizeof(ElementT)),
+          deviceBuf(alpaka::mem::buf::alloc<ElementT, size_t>(context.accDev, bufsize)),
+          hostBuf(view.begin(), context.hostDev, view.size()),
+          meta(MetaT()) { } /* TODO: find infos from view */
+
+    DeviceBufT getDeviceDataBuffer() {
+      auto accBuf = alpaka::mem::view::getPtrNative(deviceBuf);
+      return DeviceBufT(reinterpret_cast<char*>(accBuf) + MetaOffset);
+    }
+};
+
+
+
+template <
+    typename ContextT,
+    typename PatternT,
+    typename ViewT,
+    typename Alignment>
+struct buf_traits<HostDataBuffer<ContextT, PatternT, ViewT, Alignment>> {
+    using DeviceType = HostDevice;
+};
+
+template <
+    typename ElementT,
+    typename DeviceT,
+    typename MetaT,
+    typename Alignment>
+struct buf_traits<DeviceDataBuffer<ElementT, DeviceT, MetaT, Alignment>> {
+    using DeviceType = AccDevice;
+};
+
+
+}
+
+#endif

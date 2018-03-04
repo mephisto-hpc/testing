@@ -1,15 +1,17 @@
 #ifndef MEPHISTO_COPY
 #define MEPHISTO_COPY
+#include <mephisto/type_traits>
 
 
 namespace mephisto {
 
-template<
-    typename InputT,
-    typename OutputT>
-OutputT copy(InputT inIterFirst, InputT, inIterLast, OutputT outIter) {
+template <
+  typename StreamT,
+  typename InBufT,
+  typename OutBufT> 
+std::enable_if<std::is_same<HostDevice, typename buf_traits<InBufT>::DeviceType>::value>
+copy(StreamT &streamT, InBufT &inBuf, OutBufT &outBuf) {
 }
-
 }
 
 #endif
