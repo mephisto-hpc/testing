@@ -2,3 +2,7 @@
 	path = alpaka
 	url = git@github.com:ComputationalRadiationPhysics/alpaka.git
 	branch = develop
+[submodule "dash"]
+	path = dash
+	url = git@github.com:dash-project/dash.git
+	branch = feat-192-nviews

@@ -14,6 +14,7 @@ FIND_PACKAGE(DASH-MPI)
 INCLUDE("${ALPAKA_ROOT}/cmake/common.cmake")
 #INCLUDE("${ALPAKA_ROOT}/cmake/dev.cmake")
 
+ADD_DEFINITIONS("-D_GLIBCXX_USE_C99=1")
 INCLUDE_DIRECTORIES(
     ${CMAKE_CURRENT_LIST_DIR}/../include)
 IF(CMAKE_VERSION VERSION_LESS 3.7.0)
@@ -29,9 +30,12 @@ ALPAKA_ADD_EXECUTABLE(
 TARGET_LINK_LIBRARIES(
     0001-array
     PUBLIC "alpaka")
-ALPAKA_ADD_EXECUTABLE(
-    0002-foreach
-    "0002-foreach.cpp")
-TARGET_LINK_LIBRARIES(
-    0002-foreach
-    PUBLIC "alpaka;${DASH_LIBRARIES}")
+
+IF(DASH-MPI_FOUND)
+    ALPAKA_ADD_EXECUTABLE(
+        0002-foreach
+        "0002-foreach.cpp")
+    TARGET_LINK_LIBRARIES(
+        0002-foreach
+        PUBLIC "alpaka;${DASH_LIBRARIES}")
+ENDIF()

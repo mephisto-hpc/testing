@@ -15,9 +15,11 @@ struct array
 {
     TType m_data[TSize];
 
-    template <
-        typename InputT>
-    array(InputT inputArr) {
+    template<
+        typename TInput
+    >
+    ALPAKA_FN_HOST
+    array(TInput inputArr) {
         size_t i = 0;
         for (auto extent : inputArr) {
             m_data[i++] = extent;
@@ -30,13 +32,13 @@ struct array
 
     array(array<TType, TSize> &&) = default;
 
+    ALPAKA_FN_HOST_ACC
     array(std::initializer_list<TType> ilist) {
         size_t i = 0;
         for(auto extent : ilist) {
             m_data[i++] = extent;
         }
     }
-
 
     template<
         typename TIdx
