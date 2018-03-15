@@ -3,17 +3,14 @@
 
 namespace mephisto {
 
-struct UnknownDevice;
-struct HostDevice;
-struct AccDevice;
+namespace buf_traits {
 
-template<
-    typename Buf>
-struct buf_traits
-{
-    using DeviceType = UnknownDevice;
+template <typename T> struct is_host { static const bool value = false; };
+
+template <typename T> struct is_accelerator {
+  static const bool value = false;
 };
-
+}
 }
 
 #endif

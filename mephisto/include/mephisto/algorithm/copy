@@ -1,17 +1,18 @@
 #ifndef MEPHISTO_COPY
 #define MEPHISTO_COPY
-#include <mephisto/type_traits>
 
+#include <mephisto/type_traits>
+#include <alpaka/alpaka.hpp>
+#include <mephisto/array>
 
 namespace mephisto {
 
-template <
-  typename StreamT,
-  typename InBufT,
-  typename OutBufT> 
-std::enable_if<std::is_same<HostDevice, typename buf_traits<InBufT>::DeviceType>::value>
-copy(StreamT &streamT, InBufT &inBuf, OutBufT &outBuf) {
-}
+template <typename StreamT, typename InBufT, typename OutBufT>
+typename std::enable_if<buf_traits::is_host<InBufT>::value, void>::type
+copy(StreamT &stream, InBufT &inBuf, OutBufT &outBuf) {
+  alpaka::vec::Vec<alpaka::dim::DimInt<1u>, size_t> const extent(inBuf.view.size());
+  alpaka::mem::view::copy(stream, inBuf.deviceBuf, inBuf.hostBuf, extent);
+};
 }
 
 #endif

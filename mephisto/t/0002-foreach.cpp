@@ -1,4 +1,5 @@
 #include <mephisto/buffer>
+#include <mephisto/algorithm/copy>
 #include <libdash.h>
 #include <alpaka/alpaka.hpp>
 
@@ -17,6 +18,8 @@ int main(int argc, char *argv[]) {
     // Setup a dash array and fill it
     auto arr = dash::Array<Data>(1000);
     dash::fill(arr.begin(), arr.end(), 5.0);
+
+
     using Size = decltype(arr.size());
 
     // Setup accelerator and host
@@ -31,8 +34,9 @@ int main(int argc, char *argv[]) {
 
     DevAcc const devAcc(alpaka::pltf::getDevByIdx<PltfAcc>(0u));
     DevHost const devHost(alpaka::pltf::getDevByIdx<PltfHost>(0u));
+    StreamAcc stream(devAcc);
 
-    // Context is a pair of host and accelerator used by the mpehisto::buffer
+  // Context is a pair of host and accelerator used by the mpehisto::buffer
     auto ctx = mephisto::make_ctx(devHost, devAcc);
 
     // Get a local view to the array
@@ -45,4 +49,11 @@ int main(int argc, char *argv[]) {
       decltype(ctx),
       PatternT,
       decltype(local_arr)>(ctx, local_arr);
+
+    // Get the device buffer that was copied in the line before. It contains
+    // the actual data plus metadata.
+    auto deviceBuf = buf.getDeviceDataBuffer();
+
+    // Copy buf from the host to the device
+    mephisto::copy(stream, buf, deviceBuf);
 }

@@ -93,9 +93,9 @@ struct DeviceDataBuffer {
 
     static constexpr size_t MetaOffset = sizeof(MetaT) + sizeof(MetaT) % Alignment::value;
 
-    char *data;
+    ElementT *data;
 
-    DeviceDataBuffer(char *data) : data(data) {}
+    DeviceDataBuffer(ElementT *data) : data(data) {}
 
     ALPAKA_FN_HOST_ACC
     const MetaT& getMeta() const {
@@ -128,24 +128,26 @@ struct HostDataBuffer {
     using MetaT       = Metadata<PatternT>;
     using DeviceBufT  = DeviceDataBuffer<ElementT, DeviceT, MetaT, Alignment>;
     using DimT        = alpaka::dim::DimInt<1>;
+    using AlpakaBufT  = alpaka::mem::buf::Buf<
+      HostT,
+      ElementT,
+      DimT,
+      std::size_t>;
+    using HostBufT    = alpaka::mem::view::ViewPlainPtr<
+      HostT,
+      ElementT,
+      DimT,
+      std::size_t>;
 
     static constexpr size_t MetaOffset = sizeof(MetaT) + sizeof(MetaT) % Alignment::value;
 
-    ContextT &context;
-    ViewT &view;
-  std::size_t bufsize;
-  std::size_t datasize;
-    alpaka::mem::buf::Buf<
-      HostT,
-      ElementT,
-      DimT,
-      std::size_t> deviceBuf;
-    alpaka::mem::view::ViewPlainPtr<
-      HostT,
-      ElementT,
-      DimT,
-      std::size_t> hostBuf;
-    Metadata<PatternT> meta;
+    ContextT            &context;
+    ViewT               &view;
+    std::size_t         bufsize;
+    std::size_t         datasize;
+    AlpakaBufT          deviceBuf;
+    HostBufT            hostBuf;
+    Metadata<PatternT>  meta;
 
     HostDataBuffer(ContextT context, ViewT &view)
         : context(context),
@@ -158,30 +160,34 @@ struct HostDataBuffer {
 
     DeviceBufT getDeviceDataBuffer() {
       auto accBuf = alpaka::mem::view::getPtrNative(deviceBuf);
-      return DeviceBufT(reinterpret_cast<char*>(accBuf) + MetaOffset);
+      // Add MetaOffset bytes offset to the accBuf address
+      auto deviceBufAddr = reinterpret_cast<ElementT *>(reinterpret_cast<char*>(accBuf) + MetaOffset);
+      return DeviceBufT(deviceBufAddr);
     }
 };
 
 
 
-template <
-    typename ContextT,
-    typename PatternT,
-    typename ViewT,
-    typename Alignment>
-struct buf_traits<HostDataBuffer<ContextT, PatternT, ViewT, Alignment>> {
-    using DeviceType = HostDevice;
+namespace buf_traits {
+template<
+  typename ContextT,
+  typename PatternT,
+  typename ViewT,
+  typename Alignment >
+struct is_host<HostDataBuffer<ContextT, PatternT, ViewT, Alignment>> {
+  static const bool value = true;
 };
 
-template <
-    typename ElementT,
-    typename DeviceT,
-    typename MetaT,
-    typename Alignment>
-struct buf_traits<DeviceDataBuffer<ElementT, DeviceT, MetaT, Alignment>> {
-    using DeviceType = AccDevice;
+template<
+  typename ElementT,
+  typename DeviceT,
+  typename MetaT,
+  typename Alignment >
+struct is_accelerator<DeviceDataBuffer<ElementT, DeviceT, MetaT, Alignment>> {
+  static const bool value = true;
 };
 
+}
 
 }
 
