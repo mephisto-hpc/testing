@@ -99,7 +99,8 @@ struct DeviceDataBuffer {
 
     ALPAKA_FN_HOST_ACC
     const MetaT& getMeta() const {
-        return reinterpret_cast<MetaT>(data - MetaOffset);
+        // get the memory MetaOffset bytes before data
+        return *reinterpret_cast<MetaT *>(reinterpret_cast<char *>(data) - MetaOffset);
     }
 
     ALPAKA_FN_HOST_ACC
