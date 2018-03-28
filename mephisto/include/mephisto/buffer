@@ -69,9 +69,8 @@ struct Metadata {
             chunk_size *= i;
         }
     }
+    Metadata() {}
 
-    // TODO: remove
-    Metadata() : offsets({}), localExtents({}) {}
 
     template<
         typename IndexT>
@@ -98,7 +97,7 @@ struct DeviceDataBuffer {
     DeviceDataBuffer(ElementT *data) : data(data) {}
 
     ALPAKA_FN_HOST_ACC
-    const MetaT& getMeta() const {
+    const MetaT &getMeta() const {
         // get the memory MetaOffset bytes before data
         return *reinterpret_cast<MetaT *>(reinterpret_cast<char *>(data) - MetaOffset);
     }
@@ -148,7 +147,7 @@ struct HostDataBuffer {
     std::size_t         datasize;
     AlpakaBufT          deviceBuf;
     HostBufT            hostBuf;
-    Metadata<PatternT>  meta;
+    MetaT               meta;
 
     HostDataBuffer(ContextT context, ViewT &view)
         : context(context),
@@ -162,32 +161,46 @@ struct HostDataBuffer {
     DeviceBufT getDeviceDataBuffer() {
       auto accBuf = alpaka::mem::view::getPtrNative(deviceBuf);
       // Add MetaOffset bytes offset to the accBuf address
-      auto deviceBufAddr = reinterpret_cast<ElementT *>(reinterpret_cast<char*>(accBuf) + MetaOffset);
+      auto deviceBufAddr = reinterpret_cast<ElementT *>(reinterpret_cast<char *>(accBuf) + MetaOffset);
       return DeviceBufT(deviceBufAddr);
+    }
+
+    ElementT *getData() {
+      return view.begin();
+    }
+
+    auto getDeviceMetaView() {
+        return alpaka::mem::view::createStaticDevMemView(
+            reinterpret_cast<MetaT *>(reinterpret_cast<char *>(
+                alpaka::mem::view::getPtrNative(deviceBuf) - MetaOffset)),
+            context.accDev,
+            1);
+    }
+
+    auto getHostMetaView() {
+        return alpaka::mem::view::createStaticDevMemView(
+            &meta, context.hostDev, 1);
     }
 };
 
-
-
 namespace buf_traits {
-template<
-  typename ContextT,
-  typename PatternT,
-  typename ViewT,
-  typename Alignment >
+template <
+    typename ContextT,
+    typename PatternT,
+    typename ViewT,
+    typename Alignment>
 struct is_host<HostDataBuffer<ContextT, PatternT, ViewT, Alignment>> {
-  static const bool value = true;
+    static const bool value = true;
 };
 
-template<
-  typename ElementT,
-  typename DeviceT,
-  typename MetaT,
-  typename Alignment >
+template <
+    typename ElementT,
+    typename DeviceT,
+    typename MetaT,
+    typename Alignment>
 struct is_accelerator<DeviceDataBuffer<ElementT, DeviceT, MetaT, Alignment>> {
-  static const bool value = true;
+    static const bool value = true;
 };
-
 }
 
 }

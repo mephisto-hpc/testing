@@ -6,7 +6,7 @@
 
 
 int main(int argc, char *argv[]) {
-    using Data = float; 
+    using Data = float;
     using ArrT = dash::Array<Data>;
     using PatternT = typename dash::Array<Data>::pattern_type;
     using MetaT = typename mephisto::Metadata<PatternT>;
@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
     DevHost const devHost(alpaka::pltf::getDevByIdx<PltfHost>(0u));
     StreamAcc stream(devAcc);
 
-  // Context is a pair of host and accelerator used by the mpehisto::buffer
+    // Context is a pair of host and accelerator used by the mpehisto::buffer
     auto ctx = mephisto::make_ctx(devHost, devAcc);
 
     // Get a local view to the array
@@ -55,5 +55,10 @@ int main(int argc, char *argv[]) {
     auto deviceBuf = buf.getDeviceDataBuffer();
 
     // Copy buf from the host to the device
-    mephisto::copy(stream, buf, deviceBuf);
+    mephisto::copy(stream, buf, buf);
+
+
+    for (int i = 0; i < arr.size(); i++) {
+        printf("[%d]: %f:%f\n", i, buf.getData()[i], deviceBuf.getData()[i]);
+    }
 }

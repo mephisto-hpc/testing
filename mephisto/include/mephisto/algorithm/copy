@@ -4,14 +4,17 @@
 #include <mephisto/type_traits>
 #include <alpaka/alpaka.hpp>
 #include <mephisto/array>
+#include <iostream>
 
 namespace mephisto {
 
 template <typename StreamT, typename InBufT, typename OutBufT>
 typename std::enable_if<buf_traits::is_host<InBufT>::value, void>::type
 copy(StreamT &stream, InBufT &inBuf, OutBufT &outBuf) {
-  alpaka::vec::Vec<alpaka::dim::DimInt<1u>, size_t> const extent(inBuf.view.size());
-  alpaka::mem::view::copy(stream, inBuf.deviceBuf, inBuf.hostBuf, extent);
+  alpaka::vec::Vec<alpaka::dim::DimInt<1u>, size_t> const extent(inBuf.datasize);
+  auto deviceMeta = outBuf.getDeviceMetaView();
+  auto hostMeta = outBuf.getHostMetaView();
+  alpaka::mem::view::copy(stream, deviceMeta, hostMeta, 1);
 };
 }
 
