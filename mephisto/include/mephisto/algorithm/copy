@@ -8,13 +8,37 @@
 
 namespace mephisto {
 
-template <typename StreamT, typename InBufT, typename OutBufT>
-typename std::enable_if<buf_traits::is_host<InBufT>::value, void>::type
-copy(StreamT &stream, InBufT &inBuf, OutBufT &outBuf) {
-  alpaka::vec::Vec<alpaka::dim::DimInt<1u>, size_t> const extent(inBuf.datasize);
-  auto deviceMeta = outBuf.getDeviceMetaView();
-  auto hostMeta = outBuf.getHostMetaView();
-  alpaka::mem::view::copy(stream, deviceMeta, hostMeta, 1);
+/**
+ * Copy the elements and metadata from the host buffer to the device buffer
+ */
+template <typename StreamT, typename BufT>
+void put(StreamT &stream, BufT &hostBuf)
+{
+    alpaka::vec::Vec<alpaka::dim::DimInt<1u>, size_t> const extent =
+        hostBuf.datasize;
+    auto  deviceMeta = hostBuf.getDeviceMetaView();
+    auto  hostMeta   = hostBuf.getHostMetaView();
+    auto  deviceData = hostBuf.getDeviceDataView();
+    auto &hostData   = hostBuf.getHostDataView();
+    // Copy metadata to the beginning of the buffer on the device
+    alpaka::mem::view::copy(stream, deviceMeta, hostMeta, 1);
+    // Copy the actual elements
+    alpaka::mem::view::copy(stream, deviceData, hostData, extent);
+};
+
+
+/**
+ * Copy the elements from the device buffer to the host buffer
+ */
+template <typename StreamT, typename BufT>
+void get(StreamT &stream, BufT &hostBuf)
+{
+    alpaka::vec::Vec<alpaka::dim::DimInt<1u>, size_t> const extent =
+        hostBuf.datasize;
+    auto  deviceData = hostBuf.getDeviceDataView();
+    auto &hostData   = hostBuf.getHostDataView();
+    // Copy the actual elements
+    alpaka::mem::view::copy(stream, hostData, deviceData, extent);
 };
 }
 

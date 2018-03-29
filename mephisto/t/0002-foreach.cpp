@@ -19,6 +19,7 @@ int main(int argc, char *argv[]) {
     auto arr = dash::Array<Data>(1000);
     dash::fill(arr.begin(), arr.end(), 5.0);
 
+    arr.barrier();
 
     using Size = decltype(arr.size());
 
@@ -55,10 +56,18 @@ int main(int argc, char *argv[]) {
     auto deviceBuf = buf.getDeviceDataBuffer();
 
     // Copy buf from the host to the device
-    mephisto::copy(stream, buf, buf);
+    mephisto::put(stream, buf);
 
 
-    for (int i = 0; i < arr.size(); i++) {
-        printf("[%d]: %f:%f\n", i, buf.getData()[i], deviceBuf.getData()[i]);
+    // foreach
+
+    // copy result back to host
+    mephisto::get(stream, buf);
+
+    size_t i = 0;
+    for(auto val : arr.local) {
+        printf("[%d]: %f:%f\n", i, val, deviceBuf.getData()[i++]);
     }
+
+    dash::finalize();
 }

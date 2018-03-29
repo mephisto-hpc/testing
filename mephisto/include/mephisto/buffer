@@ -172,7 +172,7 @@ struct HostDataBuffer {
     auto getDeviceMetaView() {
         return alpaka::mem::view::createStaticDevMemView(
             reinterpret_cast<MetaT *>(reinterpret_cast<char *>(
-                alpaka::mem::view::getPtrNative(deviceBuf) - MetaOffset)),
+                alpaka::mem::view::getPtrNative(deviceBuf))),
             context.accDev,
             1);
     }
@@ -180,6 +180,18 @@ struct HostDataBuffer {
     auto getHostMetaView() {
         return alpaka::mem::view::createStaticDevMemView(
             &meta, context.hostDev, 1);
+    }
+
+    auto getDeviceDataView() {
+        return alpaka::mem::view::createStaticDevMemView(
+            reinterpret_cast<ElementT *>(reinterpret_cast<char *>(
+                alpaka::mem::view::getPtrNative(deviceBuf)) + MetaOffset),
+            context.accDev,
+            datasize);
+    }
+
+    HostBufT &getHostDataView() {
+       return hostBuf;
     }
 };
 
