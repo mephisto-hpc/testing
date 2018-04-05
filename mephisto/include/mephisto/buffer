@@ -60,13 +60,13 @@ struct Metadata {
     // Offset at first element
     OffsetsT offsets;
     ExtentsT localExtents;
-    size_t chunk_size;
+    size_t chunkSize;
 
     Metadata(OffsetsT offsets, ExtentsT localExtents) : offsets(offsets), localExtents(localExtents) {
         // Calculate the chunk size once
-        chunk_size = 1;
+        chunkSize = 1;
         for(auto i : localExtents) {
-            chunk_size *= i;
+            chunkSize *= i;
         }
     }
     Metadata() {}
@@ -102,9 +102,20 @@ struct DeviceDataBuffer {
         return *reinterpret_cast<MetaT *>(reinterpret_cast<char *>(data) - MetaOffset);
     }
 
+    /**
+     * Returns the one-past-end pointer
+     */
     ALPAKA_FN_HOST_ACC
-    ElementT *getData() const {
+    ElementT *begin() const {
         return data;
+    }
+
+    /**
+     * Returns the one-past-end pointer
+     */
+    ALPAKA_FN_HOST_ACC
+    ElementT *end() const {
+        return begin() + getMeta().chunkSize;
     }
 };
 
