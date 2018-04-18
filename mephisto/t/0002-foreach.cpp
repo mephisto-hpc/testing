@@ -1,12 +1,7 @@
 #include <libdash.h>
-#include <alpaka/alpaka.hpp>
-#include <mephisto/algorithm/copy>
 #include <mephisto/algorithm/for_each>
-#include <mephisto/buffer>
-#include <experimental/execution>
-#include <experimental/thread_pool>
-#include <mephisto/executor>
-using std::experimental::static_thread_pool;
+#include <mephisto/execution>
+#include <alpaka/alpaka.hpp>
 
 int main(int argc, char *argv[]) {
     using Data = float;
@@ -21,8 +16,6 @@ int main(int argc, char *argv[]) {
     // Setup a dash array and fill it
     auto arr = dash::Array<Data>(1000);
     dash::fill(arr.begin(), arr.end(), 5.0);
-
-    arr.barrier();
 
     using Size = decltype(arr.size());
 
@@ -40,44 +33,21 @@ int main(int argc, char *argv[]) {
     DevHost const devHost(alpaka::pltf::getDevByIdx<PltfHost>(0u));
     StreamAcc stream(devAcc);
 
-    // Context is a pair of host and accelerator used by the mpehisto::buffer
+
+    // Setup of the executor:
+    //
+    // Context is a pair of host and accelerator used by the mephisto::buffer
     auto ctx = mephisto::execution::make_context(devHost, devAcc, stream);
 
-    // Get a local view to the array
-    auto local_arr = arr.local;
-
-    // Create the host buffer. It can be used to copy data to the accelerator
-    // and returns a buffer on the device via getDeviceDataBuffer().
-    /* auto buf = mephisto::HostDataBuffer< */
-    /*   Data, */
-    /*   decltype(ctx), */
-    /*   PatternT, */
-    /*   decltype(local_arr)>(ctx, local_arr); */
-
-    /* // Get the device buffer that was copied in the line before. It contains */
-    /* // the actual data plus metadata. */
-    /* auto deviceBuf = buf.getDeviceDataBuffer(); */
-
-    /* // Copy buf from the host to the device */
-    /* mephisto::put(stream, buf); */
-
-    // foreach
-    /* mephisto::for_each(deviceBuf.begin(), deviceBuf.end(), [](const Data &data){ printf("Kernel [%f]\n", data); }); */
-
-
-    auto executor = mephisto::execution::make_executor(ctx);
+    // The executor is the one actually doing the computation
+    auto executor = mephisto::execution::make_executor(ctx, arr.pattern());
+    // The policy is used to relax guarantees
     auto policy   = mephisto::execution::make_parallel_policy(executor);
     dash::for_each(policy, arr.begin(), arr.end(), [](const Data &data) {
+    //             ^^^^^^ The policy is the only additional
+    //                    parameter compared to a usual for_each call.
         printf("for_each: %f\n", data);
     });
-
-    // copy result back to host
-    /* mephisto::get(stream, buf); */
-
-    /* size_t i = 0; */
-    /* for(auto val : arr.local) { */
-    /*     printf("[%d]: %f:%f\n", i, val, deviceBuf.begin()[i++]); */
-    /* } */
 
     dash::finalize();
 }

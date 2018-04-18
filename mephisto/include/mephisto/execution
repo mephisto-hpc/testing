@@ -1,0 +1,140 @@
+#ifndef MEPHISTO_EXECUTION
+#define MEPHISTO_EXECUTION
+
+
+#include <alpaka/alpaka.hpp>
+#include <libdash.h>
+#include <experimental/execution>
+#include <mephisto/buffer>
+#include <mephisto/algorithm/copy>
+
+namespace mephisto {
+namespace execution {
+
+using std::experimental::execution::executor_shape;
+
+/**
+ * An executor that uses alpaka to do the work.
+ */
+template<class AlpakaContext, class PatternT>
+struct AlpakaExecutor {
+    AlpakaContext ctx;
+
+    // e.g. std::array<3> for 3 dimensions
+    using index_type = typename PatternT::index_type;
+    // e.g. std::array<3> for 3 dimensions
+    /* using shape_type = std::tuple<PatternT, dash::LocalRange<ElementT>, dash::LocalIndexRange<index_type>>; */
+
+    AlpakaExecutor(AlpakaContext context)
+      : ctx(context)
+    {
+    }
+
+    template <class Function, class Shape, class SharedState>
+    void bulk_execute(
+        Function func,
+        /* executor_shape<AlpakaExecutor>::type shape, */
+        Shape       shape,
+        SharedState state)
+    {
+
+        // ---------------------------------------------
+        // Copy data to the accelerator
+        // ---------------------------------------------
+        //
+        auto local_range = std::get<1>(shape);
+        // TODO: make this less ugly
+        using ElementT = typename std::remove_reference<decltype(*(local_range.begin))>::type;
+        // local one dimensional index range
+        auto local_index = std::get<2>(shape);
+        // number of elements in local memory block
+        auto nelems = local_index.end - local_index.begin;
+        assert(nelems >= 0);
+
+        // create the host buffer
+        auto hostBuf = mephisto::HostDataBuffer<
+            ElementT,
+            AlpakaContext,
+            PatternT,
+            dash::LocalRange<ElementT>>(ctx, local_range);
+
+
+        mephisto::put(ctx.stream, hostBuf);
+
+        // get the buffer on the device
+        auto deviceBuf = hostBuf.getDeviceDataBuffer();
+
+        auto sharedState(state());
+        for (size_t i = 0; i < nelems; ++i) {
+            func(deviceBuf.begin(), i, sharedState);
+        }
+    }
+
+    template<class Policy>
+    AlpakaExecutor require(Policy &) {
+        return *this;
+    }
+
+    AlpakaContext &context()
+    {
+        return ctx;
+    }
+};
+
+
+template <class HostDevice, class AccDevice, class Stream>
+struct AlpakaExecutionContext {
+    using host_t = typename std::remove_cv<HostDevice>::type;
+    using device_t = typename std::remove_cv<AccDevice>::type;
+
+    HostDevice &hostDevice;
+    AccDevice & accDevice;
+    Stream &    stream;
+
+    AlpakaExecutionContext(
+        HostDevice &host, AccDevice &acc, Stream &stream)
+      : hostDevice(host)
+      , accDevice(acc)
+      , stream(stream)
+    {
+    }
+};
+
+template <class HostDevice, class AccDevice, class Stream>
+AlpakaExecutionContext<HostDevice, AccDevice, Stream> make_context(
+    HostDevice &host, AccDevice &acc, Stream &stream)
+{
+    return AlpakaExecutionContext<HostDevice, AccDevice, Stream>(
+        host, acc, stream);
+}
+
+template <class AlpakaContext, class Pattern>
+AlpakaExecutor<AlpakaContext, Pattern> make_executor(
+    AlpakaContext context, Pattern)
+{
+    return AlpakaExecutor<AlpakaContext, Pattern>(context);
+}
+
+// See C++17's std::execution::par
+// Additionally we enforce that the policy has an executor
+template<class Executor>
+struct ParallelPolicy {
+    Executor ex;
+
+    ParallelPolicy(Executor ex) : ex(ex) {}
+
+    const Executor &executor() const {
+        return ex;
+    }
+};
+
+template <class Executor>
+ParallelPolicy<Executor> make_parallel_policy(Executor ex)
+{
+    return ParallelPolicy<Executor>(ex);
+}
+
+}
+}
+
+#endif
