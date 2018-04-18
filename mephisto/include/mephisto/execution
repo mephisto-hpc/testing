@@ -7,9 +7,11 @@
 #include <experimental/execution>
 #include <mephisto/buffer>
 #include <mephisto/algorithm/copy>
+#include <mephisto/algorithm/for_each>
 
 namespace mephisto {
 namespace execution {
+
 
 using std::experimental::execution::executor_shape;
 
@@ -24,6 +26,8 @@ struct AlpakaExecutor {
     using index_type = typename PatternT::index_type;
     // e.g. std::array<3> for 3 dimensions
     /* using shape_type = std::tuple<PatternT, dash::LocalRange<ElementT>, dash::LocalIndexRange<index_type>>; */
+    using Acc = typename AlpakaContext::acc_t;
+    using SizeT = typename PatternT::size_type;
 
     AlpakaExecutor(AlpakaContext context)
       : ctx(context)
@@ -32,8 +36,7 @@ struct AlpakaExecutor {
 
     template <class Function, class Shape, class SharedState>
     void bulk_execute(
-        Function func,
-        /* executor_shape<AlpakaExecutor>::type shape, */
+        Function executorFunc,
         Shape       shape,
         SharedState state)
     {
@@ -48,8 +51,19 @@ struct AlpakaExecutor {
         // local one dimensional index range
         auto local_index = std::get<2>(shape);
         // number of elements in local memory block
-        auto nelems = local_index.end - local_index.begin;
+        SizeT nelems = local_index.end - local_index.begin;
         assert(nelems >= 0);
+
+        alpaka::vec::Vec<alpaka::dim::DimInt<1u>, SizeT> const extent(nelems);
+
+        alpaka::workdiv::WorkDivMembers<alpaka::dim::DimInt<1u>, SizeT> const
+            workDiv(alpaka::workdiv::getValidWorkDiv<Acc>(
+                ctx.accDevice,
+                extent,
+                static_cast<SizeT>(1u),
+                false,
+                alpaka::workdiv::GridBlockExtentSubDivRestrictions::
+                    Unrestricted));
 
         // create the host buffer
         auto hostBuf = mephisto::HostDataBuffer<
@@ -64,10 +78,17 @@ struct AlpakaExecutor {
         // get the buffer on the device
         auto deviceBuf = hostBuf.getDeviceDataBuffer();
 
+	// TODO: extract
+	ForEachKernel<Function> kernel;
+
         auto sharedState(state());
-        for (size_t i = 0; i < nelems; ++i) {
-            func(deviceBuf.begin(), i, sharedState);
-        }
+        auto const forEach(alpaka::exec::create<Acc>(
+            workDiv,
+            kernel,
+            deviceBuf.begin(),
+            nelems));
+
+        alpaka::stream::enqueue(ctx.stream, forEach);
     }
 
     template<class Policy>
@@ -82,17 +103,17 @@ struct AlpakaExecutor {
 };
 
 
-template <class HostDevice, class AccDevice, class Stream>
+template <class AccT, class HostDevice, class AccDevice, class Stream>
 struct AlpakaExecutionContext {
     using host_t = typename std::remove_cv<HostDevice>::type;
     using device_t = typename std::remove_cv<AccDevice>::type;
+    using acc_t = AccT;
 
     HostDevice &hostDevice;
     AccDevice & accDevice;
     Stream &    stream;
 
-    AlpakaExecutionContext(
-        HostDevice &host, AccDevice &acc, Stream &stream)
+    AlpakaExecutionContext(HostDevice &host, AccDevice &acc, Stream &stream)
       : hostDevice(host)
       , accDevice(acc)
       , stream(stream)
@@ -100,11 +121,11 @@ struct AlpakaExecutionContext {
     }
 };
 
-template <class HostDevice, class AccDevice, class Stream>
-AlpakaExecutionContext<HostDevice, AccDevice, Stream> make_context(
+template <class AccT, class HostDevice, class AccDevice, class Stream>
+AlpakaExecutionContext<AccT, HostDevice, AccDevice, Stream> make_context(
     HostDevice &host, AccDevice &acc, Stream &stream)
 {
-    return AlpakaExecutionContext<HostDevice, AccDevice, Stream>(
+    return AlpakaExecutionContext<AccT, HostDevice, AccDevice, Stream>(
         host, acc, stream);
 }
 
@@ -133,7 +154,6 @@ ParallelPolicy<Executor> make_parallel_policy(Executor ex)
 {
     return ParallelPolicy<Executor>(ex);
 }
-
 }
 }
 

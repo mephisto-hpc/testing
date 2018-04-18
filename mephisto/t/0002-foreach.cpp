@@ -2,6 +2,7 @@
 #include <mephisto/algorithm/for_each>
 #include <mephisto/execution>
 #include <alpaka/alpaka.hpp>
+#include <mephisto/algorithm/for_each>
 
 int main(int argc, char *argv[]) {
     using Data = float;
@@ -37,12 +38,13 @@ int main(int argc, char *argv[]) {
     // Setup of the executor:
     //
     // Context is a pair of host and accelerator used by the mephisto::buffer
-    auto ctx = mephisto::execution::make_context(devHost, devAcc, stream);
+    auto ctx = mephisto::execution::make_context<Acc>(devHost, devAcc, stream);
 
     // The executor is the one actually doing the computation
     auto executor = mephisto::execution::make_executor(ctx, arr.pattern());
     // The policy is used to relax guarantees
     auto policy   = mephisto::execution::make_parallel_policy(executor);
+
     dash::for_each(policy, arr.begin(), arr.end(), [](const Data &data) {
     //             ^^^^^^ The policy is the only additional
     //                    parameter compared to a usual for_each call.
