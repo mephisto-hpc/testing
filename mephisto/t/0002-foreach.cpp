@@ -14,41 +14,45 @@ int main(int argc, char *argv[]) {
 
     dash::init(&argc, &argv);
 
-    // Setup a dash array and fill it
+    /* // Setup a dash array and fill it */
     auto arr = dash::Array<Data>(1000);
     dash::fill(arr.begin(), arr.end(), 5.0);
 
     using Size = decltype(arr.size());
 
-    // Setup accelerator and host
-    using Acc       = alpaka::acc::AccCpuSerial<Dim, Size>;
+    // Setup accelerator and host.
+    using Acc       = alpaka::acc::AccGpuCudaRt<Dim, Size>;
     using Host      = alpaka::acc::AccCpuSerial<Dim, Size>;
-    using StreamAcc = alpaka::stream::StreamCpuSync;
+    using StreamAcc = alpaka::stream::StreamCudaRtSync;
 
     using DevAcc    = alpaka::dev::Dev<Acc>;
     using DevHost   = alpaka::dev::Dev<Host>;
     using PltfHost  = alpaka::pltf::Pltf<DevHost>;
     using PltfAcc   = alpaka::pltf::Pltf<DevAcc>;
 
+    /* // The mephisto kernel to use in the executor */
+    using Kernel = mephisto::ForEachKernel;
+
     DevAcc const devAcc(alpaka::pltf::getDevByIdx<PltfAcc>(0u));
     DevHost const devHost(alpaka::pltf::getDevByIdx<PltfHost>(0u));
     StreamAcc stream(devAcc);
 
-
     // Setup of the executor:
     //
-    // Context is a pair of host and accelerator used by the mephisto::buffer
+    // Context consists of the host, the accelerator and the stream
     auto ctx = mephisto::execution::make_context<Acc>(devHost, devAcc, stream);
 
     // The executor is the one actually doing the computation
-    auto executor = mephisto::execution::make_executor(ctx, arr.pattern());
-    // The policy is used to relax guarantees
+    auto executor = mephisto::execution::make_executor<Kernel>(ctx, arr.pattern());
+
+    // The policy is used to relax guarantees.
     auto policy   = mephisto::execution::make_parallel_policy(executor);
 
-    dash::for_each(policy, arr.begin(), arr.end(), [](const Data &data) {
+    dash::for_each_with_index(policy, arr.begin(), arr.end(), [](const Data &data, size_t idx) {
     //             ^^^^^^ The policy is the only additional
     //                    parameter compared to a usual for_each call.
-        printf("for_each: %f\n", data);
+        printf("for_each[%d]: %f\n", idx, data);
+
     });
 
     dash::finalize();

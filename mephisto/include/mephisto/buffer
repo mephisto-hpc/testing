@@ -38,7 +38,7 @@ struct Context {
 template <
   typename HostT,
   typename DeviceT>
-auto make_ctx(HostT &host, DeviceT &device) {
+Context<HostT, DeviceT> make_ctx(HostT &host, DeviceT &device) {
   return Context<HostT, DeviceT>(host, device);
 };
 
@@ -74,7 +74,6 @@ struct Metadata {
 
     template<
         typename IndexT>
-    ALPAKA_FN_HOST_ACC
     OffsetsT
     global_coords(OffsetT localOffset) {
         // calculate the global coordinates from the local
@@ -155,7 +154,7 @@ struct HostDataBuffer {
   std::size_t datasize;
   MetaT       meta;
   HostBufT    hostBuf;
-  alpaka::mem::buf::Buf<HostT, NonConstElementT, DimT, std::size_t> deviceBuf;
+  alpaka::mem::buf::Buf<DeviceT, NonConstElementT, DimT, std::size_t> deviceBuf;
 
   HostDataBuffer(ContextT &context, ViewT &view)
     : context(context)
@@ -179,25 +178,42 @@ struct HostDataBuffer {
       return view.begin();
     }
 
-    auto getDeviceMetaView() {
+    alpaka::mem::view::ViewPlainPtr<
+        DeviceT,
+        MetaT,
+        alpaka::dim::Dim<std::size_t>,
+        alpaka::size::Size<std::size_t>>
+    getDeviceMetaView()
+    {
       auto devicePtr = alpaka::mem::view::getPtrNative(deviceBuf);
       return alpaka::mem::view::createStaticDevMemView(
           reinterpret_cast<MetaT *>(devicePtr),
           context.accDevice,
-          1);
+          static_cast<std::size_t>(1));
     }
 
-    auto getHostMetaView() {
-        return alpaka::mem::view::createStaticDevMemView(
-            &meta, context.hostDevice, 1);
+    alpaka::mem::view::ViewPlainPtr<
+        HostT,
+        MetaT,
+        alpaka::dim::Dim<std::size_t>,
+        alpaka::size::Size<std::size_t>>
+    getHostMetaView()
+    {
+      return alpaka::mem::view::createStaticDevMemView(
+          &meta, context.hostDevice, static_cast<std::size_t>(1));
     }
 
-    auto getDeviceDataView() {
-        return alpaka::mem::view::createStaticDevMemView(
-            reinterpret_cast<NonConstElementT *>(reinterpret_cast<char *>(
-                alpaka::mem::view::getPtrNative(deviceBuf)) + MetaOffset),
-            context.accDevice,
-            datasize);
+    alpaka::mem::view::
+        ViewPlainPtr<DeviceT, NonConstElementT, alpaka::dim::Dim<std::size_t>, alpaka::size::Size<std::size_t>>
+        getDeviceDataView()
+    {
+      return alpaka::mem::view::createStaticDevMemView(
+          reinterpret_cast<NonConstElementT *>(
+              reinterpret_cast<char *>(
+                  alpaka::mem::view::getPtrNative(deviceBuf)) +
+              MetaOffset),
+          context.accDevice,
+          static_cast<std::size_t>(datasize));
     }
 
     HostBufT &getHostDataView() {

@@ -2,19 +2,17 @@
 #define MEPHISTO_ALGORITHM_FOR_EACH
 
 #include <alpaka/alpaka.hpp>
+#include <libdash.h>
 
 namespace mephisto {
 
-template <typename ExecutorFunc>
 struct ForEachKernel {
-  /* ExecutorFunc executorFunc; */
-
-  /* ForEachKernel(ExecutorFunc func) : executorFunc(func  {} */
-
-  template <typename AccT, typename ElemT, typename SizeT>
+  template <typename AccT, typename ElemT, typename SizeT, typename Func>
   ALPAKA_FN_ACC auto operator()(
-      AccT const &acc, ElemT const *const elem, SizeT const &numElements) const
-      -> void
+      AccT const &       acc,
+      ElemT const *const elem,
+      SizeT const &      numElements,
+      Func               executorFunc) const -> void
   {
     auto const gridThreadIdx(
         alpaka::idx::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0u]);
@@ -23,28 +21,17 @@ struct ForEachKernel {
     auto const threadFirstElemIdx(gridThreadIdx * threadElemExtent);
 
     if (threadFirstElemIdx < numElements) {
-      // Calculate the number of elements to compute in this thread.
-      // The result is uniform for all but the last thread.
       auto const threadLastElemIdx(threadFirstElemIdx + threadElemExtent);
       auto const threadLastElemIdxClipped(
           (numElements > threadLastElemIdx) ? threadLastElemIdx
                                             : numElements);
 
-      for (SizeT i(threadFirstElemIdx); i < threadLastElemIdxClipped; ++i) {
-        /* executorFunc(elem[i], i, std::tuple<>()); */
-        printf("Alpaka: %d\n", i);
+      for (SizeT i = threadFirstElemIdx; i < threadLastElemIdxClipped; ++i) {
+        executorFunc(elem, i, dash::empty());
       }
     }
   }
 };
-
-
-// func(1, 2, 3)
-template <typename UnaryFunction>
-ForEachKernel<UnaryFunction> make_kernel(UnaryFunction F)
-{
-  return ForEachKernel<UnaryFunction>(F);
-}
 
 }
 #endif

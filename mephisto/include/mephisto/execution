@@ -1,10 +1,9 @@
-#ifndef MEPHISTO_EXECUTION
-#define MEPHISTO_EXECUTION
+#ifndef MEPHISTO_EXECUTION_H
+#define MEPHISTO_EXECUTION_H
 
 
 #include <alpaka/alpaka.hpp>
 #include <libdash.h>
-#include <experimental/execution>
 #include <mephisto/buffer>
 #include <mephisto/algorithm/copy>
 #include <mephisto/algorithm/for_each>
@@ -13,19 +12,18 @@ namespace mephisto {
 namespace execution {
 
 
-using std::experimental::execution::executor_shape;
-
 /**
  * An executor that uses alpaka to do the work.
  */
-template<class AlpakaContext, class PatternT>
+template<class Kernel, class AlpakaContext, class PatternT>
 struct AlpakaExecutor {
     AlpakaContext ctx;
 
     // e.g. std::array<3> for 3 dimensions
     using index_type = typename PatternT::index_type;
     // e.g. std::array<3> for 3 dimensions
-    /* using shape_type = std::tuple<PatternT, dash::LocalRange<ElementT>, dash::LocalIndexRange<index_type>>; */
+    template<typename ElementT>
+    using shape_type = std::pair<dash::LocalRange<ElementT>, dash::LocalIndexRange<index_type>>;
     using Acc = typename AlpakaContext::acc_t;
     using SizeT = typename PatternT::size_type;
 
@@ -34,10 +32,10 @@ struct AlpakaExecutor {
     {
     }
 
-    template <class Function, class Shape, class SharedState>
+    template <class Function, class ElementT, class SharedState>
     void bulk_execute(
         Function executorFunc,
-        Shape       shape,
+        shape_type<ElementT> shape,
         SharedState state)
     {
 
@@ -45,11 +43,9 @@ struct AlpakaExecutor {
         // Copy data to the accelerator
         // ---------------------------------------------
         //
-        auto local_range = std::get<1>(shape);
-        // TODO: make this less ugly
-        using ElementT = typename std::remove_reference<decltype(*(local_range.begin))>::type;
+        auto local_range = std::get<0>(shape);
         // local one dimensional index range
-        auto local_index = std::get<2>(shape);
+        auto local_index = std::get<1>(shape);
         // number of elements in local memory block
         SizeT nelems = local_index.end - local_index.begin;
         assert(nelems >= 0);
@@ -78,15 +74,14 @@ struct AlpakaExecutor {
         // get the buffer on the device
         auto deviceBuf = hostBuf.getDeviceDataBuffer();
 
-	// TODO: extract
-	ForEachKernel<Function> kernel;
+	Kernel kernel;
 
-        auto sharedState(state());
         auto const forEach(alpaka::exec::create<Acc>(
             workDiv,
             kernel,
             deviceBuf.begin(),
-            nelems));
+            nelems,
+	    executorFunc));
 
         alpaka::stream::enqueue(ctx.stream, forEach);
     }
@@ -129,11 +124,11 @@ AlpakaExecutionContext<AccT, HostDevice, AccDevice, Stream> make_context(
         host, acc, stream);
 }
 
-template <class AlpakaContext, class Pattern>
-AlpakaExecutor<AlpakaContext, Pattern> make_executor(
+template <class Kernel, class AlpakaContext, class Pattern>
+AlpakaExecutor<Kernel, AlpakaContext, Pattern> make_executor(
     AlpakaContext context, Pattern)
 {
-    return AlpakaExecutor<AlpakaContext, Pattern>(context);
+    return AlpakaExecutor<Kernel, AlpakaContext, Pattern>(context);
 }
 
 // See C++17's std::execution::par
