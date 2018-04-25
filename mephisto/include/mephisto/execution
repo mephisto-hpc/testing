@@ -15,39 +15,34 @@ namespace execution {
 /**
  * An executor that uses alpaka to do the work.
  */
-template<class Kernel, class AlpakaContext, class PatternT>
+template<class Kernel, class AlpakaContext, bool CopyBack = false>
 struct AlpakaExecutor {
     AlpakaContext ctx;
 
-    // e.g. std::array<3> for 3 dimensions
-    using index_type = typename PatternT::index_type;
-    // e.g. std::array<3> for 3 dimensions
-    template<typename ElementT>
-    using shape_type = std::pair<dash::LocalRange<ElementT>, dash::LocalIndexRange<index_type>>;
-    using Acc = typename AlpakaContext::acc_t;
-    using SizeT = typename PatternT::size_type;
+    // we cheat a bit and use begin and end as the shape
+    template <typename IterT>
+    using shape_type = std::pair<IterT, IterT>;
+    using Acc        = typename AlpakaContext::acc_t;
+    using SizeT      = size_t;
 
     AlpakaExecutor(AlpakaContext context)
       : ctx(context)
     {
     }
 
-    template <class Function, class ElementT, class SharedState>
+    template <class Function, class IterT, class SharedState>
     void bulk_execute(
-        Function executorFunc,
-        shape_type<ElementT> shape,
-        SharedState state)
+        Function executorFunc, shape_type<IterT> shape, SharedState state)
     {
+        using ElementT = typename IterT::value_type;
+        using PatternT = typename IterT::pattern_type;
 
         // ---------------------------------------------
         // Copy data to the accelerator
         // ---------------------------------------------
-        //
-        auto local_range = std::get<0>(shape);
-        // local one dimensional index range
-        auto local_index = std::get<1>(shape);
-        // number of elements in local memory block
-        SizeT nelems = local_index.end - local_index.begin;
+        auto begin = std::get<0>(shape);
+        auto end = std::get<1>(shape);
+        SizeT nelems = std::distance(begin, end);
         assert(nelems >= 0);
 
         alpaka::vec::Vec<alpaka::dim::DimInt<1u>, SizeT> const extent(nelems);
@@ -66,24 +61,30 @@ struct AlpakaExecutor {
             ElementT,
             AlpakaContext,
             PatternT,
-            dash::LocalRange<ElementT>>(ctx, local_range);
+            dash::GlobIter<ElementT, PatternT>>(ctx, begin, end);
 
 
+        // copy the buffer to the device
         mephisto::put(ctx.stream, hostBuf);
 
         // get the buffer on the device
         auto deviceBuf = hostBuf.getDeviceDataBuffer();
 
-	Kernel kernel;
+        Kernel kernel;
 
+        // ---------------------------------------------
+        // Execute the kernel
+        // ---------------------------------------------
+        //
         auto const forEach(alpaka::exec::create<Acc>(
-            workDiv,
-            kernel,
-            deviceBuf.begin(),
-            nelems,
-	    executorFunc));
+            workDiv, kernel, deviceBuf, nelems, executorFunc));
 
         alpaka::stream::enqueue(ctx.stream, forEach);
+
+        if (CopyBack) {
+          // copy the buffer to the device
+          mephisto::get(ctx.stream, hostBuf);
+        }
     }
 
     template<class Policy>
@@ -97,23 +98,28 @@ struct AlpakaExecutor {
     }
 };
 
+template <class Kernel, class AlpakaContext>
+using AlpakaOneWayExecutor = AlpakaExecutor<Kernel, AlpakaContext, false>;
+
+template <class Kernel, class AlpakaContext>
+using AlpakaTwoWayExecutor = AlpakaExecutor<Kernel, AlpakaContext, true>;
 
 template <class AccT, class HostDevice, class AccDevice, class Stream>
 struct AlpakaExecutionContext {
-    using host_t = typename std::remove_cv<HostDevice>::type;
-    using device_t = typename std::remove_cv<AccDevice>::type;
-    using acc_t = AccT;
+  using host_t   = typename std::remove_cv<HostDevice>::type;
+  using device_t = typename std::remove_cv<AccDevice>::type;
+  using acc_t    = AccT;
 
-    HostDevice &hostDevice;
-    AccDevice & accDevice;
-    Stream &    stream;
+  HostDevice &hostDevice;
+  AccDevice & accDevice;
+  Stream &    stream;
 
-    AlpakaExecutionContext(HostDevice &host, AccDevice &acc, Stream &stream)
-      : hostDevice(host)
-      , accDevice(acc)
-      , stream(stream)
-    {
-    }
+  AlpakaExecutionContext(HostDevice &host, AccDevice &acc, Stream &stream)
+    : hostDevice(host)
+    , accDevice(acc)
+    , stream(stream)
+  {
+  }
 };
 
 template <class AccT, class HostDevice, class AccDevice, class Stream>
@@ -124,24 +130,21 @@ AlpakaExecutionContext<AccT, HostDevice, AccDevice, Stream> make_context(
         host, acc, stream);
 }
 
-template <class Kernel, class AlpakaContext, class Pattern>
-AlpakaExecutor<Kernel, AlpakaContext, Pattern> make_executor(
-    AlpakaContext context, Pattern)
-{
-    return AlpakaExecutor<Kernel, AlpakaContext, Pattern>(context);
-}
-
 // See C++17's std::execution::par
 // Additionally we enforce that the policy has an executor
-template<class Executor>
+template <class Executor>
 struct ParallelPolicy {
-    Executor ex;
+  Executor ex;
 
-    ParallelPolicy(Executor ex) : ex(ex) {}
+  ParallelPolicy(Executor ex)
+    : ex(ex)
+  {
+  }
 
-    const Executor &executor() const {
-        return ex;
-    }
+  const Executor &executor() const
+  {
+    return ex;
+  }
 };
 
 template <class Executor>

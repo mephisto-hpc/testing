@@ -1,39 +1,50 @@
 #include <libdash.h>
 #include <mephisto/algorithm/for_each>
 #include <mephisto/execution>
+#include <mephisto/array>
 #include <alpaka/alpaka.hpp>
-#include <mephisto/algorithm/for_each>
+
+
+struct Pos {
+    unsigned long x, y, z;
+};
 
 int main(int argc, char *argv[]) {
-    using Data = float;
-    using ArrT = dash::Array<Data>;
-    using PatternT = typename dash::Array<Data>::pattern_type;
-    using MetaT = typename mephisto::Metadata<PatternT>;
-    using ViewT = typename dash::Array<Data>::local_type;
-    using Dim = alpaka::dim::DimInt<1>;
+  auto const Dim  = 3;
+  using Data      = Pos;
+  using PatternT  = dash::BlockPattern<Dim>;
+  using MetaT     = typename mephisto::Metadata<PatternT>;
+  using ViewT     = typename dash::Array<Data>::local_type;
+  using AlpakaDim = alpaka::dim::DimInt<1>;
+  using ArrayT    = dash::Array<Data, dash::default_index_t, PatternT>;
+  using SizeT     = ArrayT::size_type;
 
-    dash::init(&argc, &argv);
+  dash::init(&argc, &argv);
 
-    /* // Setup a dash array and fill it */
-    auto arr = dash::Array<Data>(100000);
-    dash::fill(arr.begin(), arr.end(), 5.0);
+  PatternT pattern {10, 10, 10};
+  ArrayT arr {pattern};
+  dash::fill(arr.begin(), arr.end(), {42, 42, 42});
 
-    using Size = decltype(arr.size());
 
-    // Setup accelerator and host.
-    using Acc       = alpaka::acc::AccGpuCudaRt<Dim, Size>;
-    using Host      = alpaka::acc::AccCpuSerial<Dim, Size>;
+    // Setup accelerator and host
+#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
+    using Acc       = alpaka::acc::AccGpuCudaRt<AlpakaDim, SizeT>;
     using StreamAcc = alpaka::stream::StreamCudaRtSync;
+#else
+    using Acc       = alpaka::acc::AccCpuSerial<AlpakaDim, SizeT>;
+    using StreamAcc = alpaka::stream::StreamCpuSync;
+#endif
+    using Host      = alpaka::acc::AccCpuSerial<AlpakaDim, SizeT>;
 
     using DevAcc    = alpaka::dev::Dev<Acc>;
     using DevHost   = alpaka::dev::Dev<Host>;
     using PltfHost  = alpaka::pltf::Pltf<DevHost>;
     using PltfAcc   = alpaka::pltf::Pltf<DevAcc>;
 
-    /* // The mephisto kernel to use in the executor */
-    using Kernel = mephisto::ForEachKernel;
+    // The mephisto kernel to use in the executor
+    using Kernel = mephisto::ForEachWithIndexKernel;
 
-    DevAcc const devAcc(alpaka::pltf::getDevByIdx<PltfAcc>(dash::myid() % 2));
+    DevAcc const devAcc(alpaka::pltf::getDevByIdx<PltfAcc>(0u));
     DevHost const devHost(alpaka::pltf::getDevByIdx<PltfHost>(0u));
     StreamAcc stream(devAcc);
 
@@ -43,19 +54,30 @@ int main(int argc, char *argv[]) {
     auto ctx = mephisto::execution::make_context<Acc>(devHost, devAcc, stream);
 
     // The executor is the one actually doing the computation
-    auto executor = mephisto::execution::make_executor<Kernel>(ctx, arr.pattern());
+    mephisto::execution::AlpakaTwoWayExecutor<Kernel, decltype(ctx)> executor(ctx);
 
     // The policy is used to relax guarantees.
-    auto policy   = mephisto::execution::make_parallel_policy(executor);
+    auto policy = mephisto::execution::make_parallel_policy(executor);
 
-    dash::for_each_with_index(policy, arr.begin(), arr.end(), [] ALPAKA_FN_ACC (const Data &data, size_t idx) {
-    //             ^^^^^^ The policy is the only additional
-    //                    parameter compared to a usual for_each call.
-        printf("for_each[%d]: %f\n", idx, data);
+    // set the coordinates using an Alpaka policy
+    dash::for_each_with_index(
+        policy,
+        arr.begin(),
+        arr.end(),
+        [] ALPAKA_FN_ACC (
+            Data &data, const mephisto::array<SizeT, Dim> coords) {
+          data.x = coords[0];
+          data.y = coords[1];
+          data.z = coords[2];
+        });
 
+    // Check the written coordinates using the standard for_each_with_index
+    dash::for_each_with_index(arr.begin(), arr.end(), [&pattern](const Data &d, PatternT::index_type i) {
+        auto const coords = pattern.coords(i);
+        printf("mephisto: [%lu,%lu,%lu] -  dash: [%lu,%lu,%lu]\n", d.x, d.y, d.z, coords[0], coords[1], coords[2]);
     });
-
     dash::finalize();
 }
+
 
 

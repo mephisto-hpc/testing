@@ -59,24 +59,36 @@ struct Metadata {
     // Offset at first element
     OffsetsT offsets;
     ExtentsT localExtents;
+    ExtentsT globalExtents;
 
     size_t chunkSize;
 
-    Metadata(OffsetsT offsets, ExtentsT localExtents) : offsets(offsets), localExtents(localExtents) {
+    Metadata(OffsetsT offsets, ExtentsT globalExtents, ExtentsT localExtents) : offsets(offsets), localExtents(localExtents) {
         // Calculate the chunk size once
         chunkSize = 1;
         for(auto i : localExtents) {
             chunkSize *= i;
         }
     }
-    Metadata() {}
 
+    ALPAKA_FN_HOST_ACC
+      OffsetsT global_coords(ExtentT localOffset) const {
+      OffsetsT globalCoords;
 
-    template<
-        typename IndexT>
-    OffsetsT
-    global_coords(OffsetT localOffset) {
-        // calculate the global coordinates from the local
+      if (NDim == 1) {
+        globalCoords[0] = offsets[0] + localOffset;
+      }
+      else if (NDim == 2) {
+        globalCoords[0] = offsets[0] + (localOffset / localExtents[0]);
+        globalCoords[1] = offsets[1] + (localOffset % localExtents[0]);
+      }
+      else if (NDim == 3) {
+        globalCoords[0] =
+            offsets[2] + (localOffset / (localExtents[0] * localExtents[1]));
+        globalCoords[1] = offsets[0] + ((localOffset % (localExtents[0] * localExtents[1])) / localExtents[0]);
+        globalCoords[2] = offsets[1] + (localOffset % localExtents[0]);
+      }
+      return globalCoords;
     }
 };
 
@@ -90,7 +102,6 @@ template <
 struct DeviceDataBuffer {
 
     static constexpr size_t MetaOffset = sizeof(MetaT) + sizeof(MetaT) % Alignment::value;
-
     ElementT *data;
 
     DeviceDataBuffer(ElementT *data) : data(data) {}
@@ -105,7 +116,7 @@ struct DeviceDataBuffer {
      * Returns the one-past-end pointer
      */
     ALPAKA_FN_HOST_ACC
-    ElementT *begin() const {
+    ElementT *begin() {
         return data;
     }
 
@@ -131,13 +142,14 @@ template <
     typename ElementT,
     typename ContextT,
     typename PatternT,
-    typename ViewT,
+    typename IterT,
     typename Alignment =
         typename alpaka::core::align::OptimalAlignment<sizeof(ElementT)>::type>
 struct HostDataBuffer {
   using NonConstElementT = typename std::remove_const<ElementT>::type;
   using HostT            = typename ContextT::host_t;
   using DeviceT          = typename ContextT::device_t;
+
   using MetaT            = Metadata<PatternT>;
   using DeviceBufT =
       DeviceDataBuffer<NonConstElementT, DeviceT, MetaT, Alignment>;
@@ -148,22 +160,27 @@ struct HostDataBuffer {
   static constexpr size_t MetaOffset =
       sizeof(MetaT) + sizeof(MetaT) % Alignment::value;
 
-  ContextT &  context;
-  ViewT &     view;
+  ContextT &context;
+  IterT begin;
+  IterT end;
   std::size_t bufsize;
   std::size_t datasize;
-  MetaT       meta;
-  HostBufT    hostBuf;
+  MetaT meta;
+  HostBufT hostBuf;
   alpaka::mem::buf::Buf<DeviceT, char, DimT, std::size_t> deviceBuf;
 
-  HostDataBuffer(ContextT &context, ViewT &view)
+  HostDataBuffer(ContextT &context, IterT begin, IterT end)
     : context(context)
-    , view(view)
+    , begin(begin)
+    , end(end)
     , bufsize(
-          sizeof(MetaT) + std::distance(view.begin, view.end) * sizeof(ElementT) + Alignment::value)
-    , datasize(std::distance(view.begin, view.end))
-    , meta(MetaT())
-    , hostBuf(view.begin, context.hostDevice, datasize)
+          sizeof(MetaT) + std::distance(begin, end) * sizeof(ElementT) + Alignment::value)
+    , datasize(std::distance(begin, end))
+    , meta(MetaT(
+          begin.pattern().coords(begin.gpos()),
+          begin.pattern().extents(),
+          begin.pattern().local_extents()))
+    , hostBuf(begin.local(), context.hostDevice, datasize)
     , deviceBuf(alpaka::mem::buf::alloc<char, size_t>(context.accDevice, bufsize))
   { } /* TODO: find infos from view */
 
@@ -174,8 +191,9 @@ struct HostDataBuffer {
       return DeviceBufT(deviceBufAddr);
     }
 
-    ElementT *getData() {
-      return view.begin();
+    ElementT *getData()
+    {
+      return begin.local();
     }
 
     alpaka::mem::view::ViewPlainPtr<
@@ -217,8 +235,9 @@ struct HostDataBuffer {
           context.accDevice, static_cast<std::size_t>(datasize));
     }
 
-    HostBufT &getHostDataView() {
-       return hostBuf;
+    HostBufT &getHostDataView()
+    {
+      return hostBuf;
     }
 };
 

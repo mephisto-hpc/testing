@@ -3,16 +3,17 @@
 
 #include <alpaka/alpaka.hpp>
 #include <libdash.h>
+#include <mephisto/buffer>
 
 namespace mephisto {
 
-struct ForEachKernel {
-  template <typename AccT, typename ElemT, typename SizeT, typename Func>
+struct ForEachWithIndexKernel {
+  template <typename AccT, typename BufT, typename SizeT, typename Func>
   ALPAKA_FN_ACC auto operator()(
-      AccT const &       acc,
-      ElemT const *const elem,
-      SizeT const &      numElements,
-      Func               executorFunc) const -> void
+      AccT const&  acc,
+      BufT         buf,
+      SizeT const& numElements,
+      Func         executorFunc) const -> void
   {
     auto const gridThreadIdx(
         alpaka::idx::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0u]);
@@ -27,7 +28,9 @@ struct ForEachKernel {
                                             : numElements);
 
       for (SizeT i = threadFirstElemIdx; i < threadLastElemIdxClipped; ++i) {
-        executorFunc(elem, i, dash::empty());
+        auto &meta = buf.getMeta();
+        auto coords = meta.global_coords(i);
+        executorFunc(buf.begin(), i, coords, NULL);
       }
     }
   }
