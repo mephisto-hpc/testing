@@ -154,17 +154,17 @@ struct HostDataBuffer {
   std::size_t datasize;
   MetaT       meta;
   HostBufT    hostBuf;
-  alpaka::mem::buf::Buf<DeviceT, NonConstElementT, DimT, std::size_t> deviceBuf;
+  alpaka::mem::buf::Buf<DeviceT, char, DimT, std::size_t> deviceBuf;
 
   HostDataBuffer(ContextT &context, ViewT &view)
     : context(context)
     , view(view)
     , bufsize(
           sizeof(MetaT) + std::distance(view.begin, view.end) * sizeof(ElementT) + Alignment::value)
-    , datasize(std::distance(view.begin, view.end) * sizeof(ElementT))
+    , datasize(std::distance(view.begin, view.end))
     , meta(MetaT())
     , hostBuf(view.begin, context.hostDevice, datasize)
-    , deviceBuf(alpaka::mem::buf::alloc<NonConstElementT, size_t>(context.accDevice, bufsize))
+    , deviceBuf(alpaka::mem::buf::alloc<char, size_t>(context.accDevice, bufsize))
   { } /* TODO: find infos from view */
 
     DeviceBufT getDeviceDataBuffer() {
@@ -186,10 +186,10 @@ struct HostDataBuffer {
     getDeviceMetaView()
     {
       auto devicePtr = alpaka::mem::view::getPtrNative(deviceBuf);
-      return alpaka::mem::view::createStaticDevMemView(
-          reinterpret_cast<MetaT *>(devicePtr),
-          context.accDevice,
-          static_cast<std::size_t>(1));
+      return alpaka::mem::view::ViewPlainPtr<DeviceT, MetaT,
+                                             alpaka::dim::Dim<std::size_t>,
+                                             alpaka::size::Size<std::size_t>>(
+          reinterpret_cast<MetaT *>(devicePtr), context.accDevice, static_cast<std::size_t>(1));
     }
 
     alpaka::mem::view::ViewPlainPtr<
@@ -207,39 +207,20 @@ struct HostDataBuffer {
         ViewPlainPtr<DeviceT, NonConstElementT, alpaka::dim::Dim<std::size_t>, alpaka::size::Size<std::size_t>>
         getDeviceDataView()
     {
-      return alpaka::mem::view::createStaticDevMemView(
+      return alpaka::mem::view::ViewPlainPtr<DeviceT, NonConstElementT,
+                                             alpaka::dim::Dim<std::size_t>,
+                                             alpaka::size::Size<std::size_t>>(
           reinterpret_cast<NonConstElementT *>(
               reinterpret_cast<char *>(
                   alpaka::mem::view::getPtrNative(deviceBuf)) +
               MetaOffset),
-          context.accDevice,
-          static_cast<std::size_t>(datasize));
+          context.accDevice, static_cast<std::size_t>(datasize));
     }
 
     HostBufT &getHostDataView() {
        return hostBuf;
     }
 };
-
-/* namespace buf_traits { */
-/* template < */
-/*     typename ContextT, */
-/*     typename PatternT, */
-/*     typename ViewT, */
-/*     typename Alignment> */
-/* struct is_host<HostDataBuffer<ContextT, PatternT, ViewT, Alignment>> { */
-/*     static const bool value = true; */
-/* }; */
-
-/* template < */
-/*     typename ElementT, */
-/*     typename DeviceT, */
-/*     typename MetaT, */
-/*     typename Alignment> */
-/* struct is_accelerator<DeviceDataBuffer<ElementT, DeviceT, MetaT, Alignment>> { */
-/*     static const bool value = true; */
-/* }; */
-/* } */
 
 }
 

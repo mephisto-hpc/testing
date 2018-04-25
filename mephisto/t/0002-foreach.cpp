@@ -15,7 +15,7 @@ int main(int argc, char *argv[]) {
     dash::init(&argc, &argv);
 
     /* // Setup a dash array and fill it */
-    auto arr = dash::Array<Data>(1000);
+    auto arr = dash::Array<Data>(100000);
     dash::fill(arr.begin(), arr.end(), 5.0);
 
     using Size = decltype(arr.size());
@@ -33,7 +33,7 @@ int main(int argc, char *argv[]) {
     /* // The mephisto kernel to use in the executor */
     using Kernel = mephisto::ForEachKernel;
 
-    DevAcc const devAcc(alpaka::pltf::getDevByIdx<PltfAcc>(0u));
+    DevAcc const devAcc(alpaka::pltf::getDevByIdx<PltfAcc>(dash::myid() % 2));
     DevHost const devHost(alpaka::pltf::getDevByIdx<PltfHost>(0u));
     StreamAcc stream(devAcc);
 
@@ -48,7 +48,7 @@ int main(int argc, char *argv[]) {
     // The policy is used to relax guarantees.
     auto policy   = mephisto::execution::make_parallel_policy(executor);
 
-    dash::for_each_with_index(policy, arr.begin(), arr.end(), [](const Data &data, size_t idx) {
+    dash::for_each_with_index(policy, arr.begin(), arr.end(), [] ALPAKA_FN_ACC (const Data &data, size_t idx) {
     //             ^^^^^^ The policy is the only additional
     //                    parameter compared to a usual for_each call.
         printf("for_each[%d]: %f\n", idx, data);
