@@ -4,5 +4,5 @@
 	branch = develop
 [submodule "dash"]
 	path = dash
-	url = git@github.com:dash-project/dash.git
-	branch = feat-192-nviews
+	url = git@github.com:pascalj/dash.git
+	branch = feat-executors
