@@ -6,3 +6,7 @@
 	path = dash
 	url = git@github.com:dash-project/dash.git
 	branch = feat-192-nviews
+[submodule "llama"]
+	path = llama
+	url = git@github.com:ComputationalRadiationPhysics/llama.git
+	branch = master
