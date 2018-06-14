@@ -5,4 +5,4 @@
 [submodule "dash"]
 	path = dash
 	url = git@github.com:pascalj/dash.git
-	branch = feat-executors
+	branch = feat-alpaka-policy

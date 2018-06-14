@@ -155,4 +155,18 @@ ParallelPolicy<Executor> make_parallel_policy(Executor ex)
 }
 }
 
+namespace dash {
+
+template <class Executor>
+struct is_execution_policy<mephisto::execution::ParallelPolicy<Executor>>
+    : std::true_type {
+};
+
+template <class Executor>
+struct has_executor<mephisto::execution::ParallelPolicy<Executor>>
+    : std::true_type {
+};
+
+}
+
 #endif
