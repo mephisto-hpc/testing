@@ -6,3 +6,6 @@
 	path = dash
 	url = git@github.com:pascalj/dash.git
 	branch = feat-alpaka-policy
+[submodule "gtest"]
+	path = gtest
+	url = https://github.com/google/googletest.git
