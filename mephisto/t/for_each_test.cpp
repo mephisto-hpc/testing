@@ -6,9 +6,6 @@
 #include <mephisto/array>
 #include <alpaka/alpaka.hpp>
 
-/* static int meph_argc; */
-/* static char** meph_argv; */
-
 TEST_F(ForEachTest, itWorks) {
   auto const Dim  = 3;
   using Data      = Pos;

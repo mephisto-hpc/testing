@@ -26,11 +26,11 @@ IF(CMAKE_VERSION VERSION_LESS 3.7.0)
 ENDIF()
 
 ALPAKA_ADD_EXECUTABLE(
-    0001-array
-    "0001-array.cpp")
+    array_test
+    "array_test.cpp")
 TARGET_LINK_LIBRARIES(
-    0001-array
-    PUBLIC "alpaka")
+    array_test
+    PUBLIC "alpaka;gtest_main")
 
 IF(DASH-MPI_FOUND)
     ALPAKA_ADD_EXECUTABLE(

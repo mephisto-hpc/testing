@@ -57,6 +57,7 @@ protected:
   }
 };
 
+// This needs to be defined outside of TEST_F for nvcc.
 struct ForEachClb {
   void operator()(Data &data, const mephisto::array<size_t, 3> coords)
   {
