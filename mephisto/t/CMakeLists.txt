@@ -15,6 +15,7 @@ INCLUDE("${ALPAKA_ROOT}/cmake/common.cmake")
 #INCLUDE("${ALPAKA_ROOT}/cmake/dev.cmake")
 
 ADD_DEFINITIONS("-D_GLIBCXX_USE_C99=1")
+INCLUDE_DIRECTORIES("${gtest_SOURCE_DIR}/include")
 INCLUDE_DIRECTORIES(
     ${CMAKE_CURRENT_LIST_DIR}/../include)
 IF(CMAKE_VERSION VERSION_LESS 3.7.0)
@@ -33,9 +34,9 @@ TARGET_LINK_LIBRARIES(
 
 IF(DASH-MPI_FOUND)
     ALPAKA_ADD_EXECUTABLE(
-        0002-foreach
-        "0002-foreach.cpp")
+        for_each_test
+        "for_each_test.cpp")
     TARGET_LINK_LIBRARIES(
-        0002-foreach
-        PUBLIC "alpaka;${DASH_LIBRARIES}")
+        for_each_test
+        PUBLIC "alpaka;${DASH_LIBRARIES};gtest_main")
 ENDIF()
