@@ -5,17 +5,17 @@
 
 struct Chrono
 {
-	Chrono() :
-		last( std::chrono::system_clock::now() )
-	{ }
+    Chrono()
+    : last(std::chrono::high_resolution_clock::now())
+    {}
 
-	void printAndReset( std::string eventName)
-	{
-		auto end = std::chrono::system_clock::now();
-		std::chrono::duration<double> elapsed_seconds = end-last;
-		std::cout << eventName << ":\t" << elapsed_seconds.count() << " s\n";
-		last = end;
-	}
+    void printAndReset(const std::string& eventName)
+    {
+        auto end = std::chrono::high_resolution_clock::now();
+        auto elapsed_seconds = end-last;
+        std::cout << eventName << " " << (std::chrono::duration_cast<std::chrono::microseconds>(elapsed_seconds).count() / 1000000.) << " s\n";
+        last = end;
+    }
 
-	std::chrono::time_point< std::chrono::system_clock > last;
+    std::chrono::time_point< std::chrono::high_resolution_clock > last;
 };
