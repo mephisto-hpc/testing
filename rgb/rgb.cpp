@@ -119,9 +119,11 @@ struct UpdateKernel
             LLAMA_INDEPENDENT_DATA
             for (auto y = startY; y < endY; ++y) {
                 const size_t local_index = x * problemSizeY + y;
+#if 0
                 std::cout << "globalThread: (" << globalThreadIdx[0u] << "/" << globalThreadExtent[0u] << ", " << globalThreadIdx[1u] << "/" << globalThreadExtent[1u] << ")\n"
                           << "coord         (" << x << ", " << y << ") => " << local_index << " "
                           << std::endl;
+#endif
                 view(blockLocalIdx + local_index) *= (coordX + x) * factor;
             }
         }
@@ -322,8 +324,8 @@ main(int ac, char* av[])
 
 #if 1
 
-        std::cout << "problem:  " << lblock_view.extent(0) << "×" << lblock_view.extent(1) << std::endl;
-        std::cout << "blocks:   " << blocks[0u] << "×" << blocks[1u] << std::endl;
+        std::cout << myid << ": problem:  " << lblock_view.extent(0) << "×" << lblock_view.extent(1) << std::endl;
+        std::cout << myid << ": blocks:   " << blocks[0u] << "×" << blocks[1u] << std::endl;
 
         tpStart = std::chrono::high_resolution_clock::now();
         // start 2d kernel, pass: global_coords, local_index, size.width, block.extents, view_soa
