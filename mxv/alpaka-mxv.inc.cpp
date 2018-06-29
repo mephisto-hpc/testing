@@ -22,7 +22,7 @@ struct HostInitBlockMatrix
         TBlockGrid const & blockCoord ) const
     -> void
     {
-        using Size = alpaka::size::Size<TAcc>;
+        using Size = alpaka::idx::Idx<TAcc>;
 
         /**
          * In the most cases the parallel work distibution depends
@@ -210,13 +210,13 @@ main(
     using WorkDiv = alpaka::workdiv::WorkDivMembers<Dim, Size>;
 
     using Host = alpaka::acc::AccCpuOmp2Blocks<Dim, Size>;
-    using StreamHost = alpaka::stream::StreamCpuSync;
+    using QueueHost = alpaka::queue::QueueCpuSync;
     using DevHost = alpaka::dev::Dev<Host>;
     using PltfHost = alpaka::pltf::Pltf<DevHost>;
 
 #ifdef USE_GPU
     using Acc = alpaka::acc::AccGpuCudaRt<Dim, Size>;
-    using StreamAcc = alpaka::stream::StreamCudaRtSync;
+    using QueueAcc = alpaka::queue::QueueCudaRtSync;
 #else
 //#define USE_OMP_2_THREADS
 #ifdef USE_OMP_2_THREADS
@@ -224,7 +224,7 @@ main(
 #else
     using Acc = alpaka::acc::AccCpuOmp2Blocks<Dim, Size>;
 #endif
-    using StreamAcc = alpaka::stream::StreamCpuSync;
+    using QueueAcc = alpaka::queue::QueueCpuSync;
 #endif
     using DevAcc = alpaka::dev::Dev<Acc>;
     using PltfAcc = alpaka::pltf::Pltf<DevAcc>;
@@ -291,19 +291,19 @@ main(
               << "Acc:  " << alpaka::acc::getAccName<Acc>()  << " " << workDivAcc  << "\n";
 
     /**
-     * Create a stream to the accelerator device
+     * Create a queue to the accelerator device
      *
-     * A stream can be interpreted as the work queue
-     * of a particular device. Streams are filled with
+     * A queue can be interpreted as the work queue
+     * of a particular device. Queues are filled with
      * executors and alpaka takes care that these
-     * executors will be executed. Streams are provided in
+     * executors will be executed. Queues are provided in
      * async and sync variants.
-     * The example stream is a sync stream to a cpu device,
-     * but it also exists an async stream for this
-     * device (StreamCpuAsync).
+     * The example queue is a sync queue to a cpu device,
+     * but it also exists an async queue for this
+     * device (QueueCpuAsync).
      */
-    StreamHost streamHost(devHost);
-    StreamAcc streamAcc(devAcc);
+    QueueHost queueHost(devHost);
+    QueueAcc queueAcc(devAcc);
 
     /**
      * Run kernel
@@ -313,9 +313,9 @@ main(
      * the actual method that should be accelerated. An
      * object of the kernel is used to create an execution
      * unit and this unit is finally enqueued into an
-     * accelerator stream. The enqueuing can be done
+     * accelerator queue. The enqueuing can be done
      * synchronously or asynchronously depending on the choosen
-     * stream (see type definitions above).
+     * queue (see type definitions above).
      */
     HostInitBlockMatrix initMatrixKernel;
     HostInitBlockVector initVectorKernel;
@@ -333,23 +333,20 @@ main(
         auto y_block = &y[block_y * BS];
         auto x_block = &x[block_y * BS];
 
-        auto const initVectorX(alpaka::exec::create<Host>(
+        alpaka::kernel::exec<Host>(queueHost,
             workDivHost,
             initVectorKernel,
             x_block,
             1.0, 0.0,
             block_y,
-            block_grid_extent));
-        auto const initVectorY(alpaka::exec::create<Host>(
+            block_grid_extent);
+        alpaka::kernel::exec<Host>(queueHost,
             workDivHost,
             initVectorKernel,
             y_block,
             0.0, 0.0,
             block_y,
-            block_grid_extent));
-
-        alpaka::stream::enqueue(streamHost, initVectorX);
-        alpaka::stream::enqueue(streamHost, initVectorY);
+            block_grid_extent);
 
         for (Size block_x = 0; block_x < NBS; block_x++) {
             Size block_linear = block_y * NBS + block_x;
@@ -357,13 +354,12 @@ main(
             /* @todo make block available in device memory */
             auto A_block = &A[block_linear * BS * BS];
             const alpaka::vec::Vec<Dim2, Size> block_grid_coord(block_y, block_x);
-            auto const initMatrix(alpaka::exec::create<Host>(
+            alpaka::kernel::exec<Host>(queueHost,
                 workDivHost,
                 initMatrixKernel,
                 A_block,
                 block_grid_extent,
-                block_grid_coord));
-            alpaka::stream::enqueue(streamHost, initMatrix);
+                block_grid_coord);
 
             for (Size local_y = 0; local_y < BS; local_y++) {
                 Size global_y = block_y * BS + local_y;
@@ -418,7 +414,7 @@ main(
         alpaka::mem::view::ViewPlainPtr<DevHost, Data, Dim, Size> hostYBlockPlain(&y[block_y * BS], devHost, BS);
 
         /* copy y from host memory to device */
-        alpaka::mem::view::copy(streamAcc, deviceYBlock, hostYBlockPlain, BS);
+        alpaka::mem::view::copy(queueAcc, deviceYBlock, hostYBlockPlain, BS);
 
         for (Size block_x = 0; block_x < NBS; block_x++) {
             Size block_linear = block_y * NBS + block_x;
@@ -427,25 +423,24 @@ main(
             alpaka::mem::view::ViewPlainPtr<DevHost, Data, Dim, Size> hostXBlockPlain(&x[block_x * BS], devHost, BS);
 
             /* copy A from host memory to device */
-            alpaka::mem::view::copy(streamAcc, deviceABlock, hostABlockPlain, BS * BS);
+            alpaka::mem::view::copy(queueAcc, deviceABlock, hostABlockPlain, BS * BS);
             /* copy x from host memory to device */
-            alpaka::mem::view::copy(streamAcc, deviceXBlock, hostXBlockPlain, BS);
+            alpaka::mem::view::copy(queueAcc, deviceXBlock, hostXBlockPlain, BS);
 
             for (Size block_r = 0; block_r < BS; block_r++) {
 
-                auto const multMatrix(alpaka::exec::create<Acc>(
+                alpaka::kernel::exec<Acc>(queueAcc,
                     workDivAcc,
                     multMatricVectorKernel,
                     alpaka::mem::view::getPtrNative(deviceYBlock) + block_r,
                     alpaka::mem::view::getPtrNative(deviceABlock) + block_r * BS,
                     alpaka::mem::view::getPtrNative(deviceXBlock),
-                    BS));
-                alpaka::stream::enqueue(streamAcc, multMatrix);
+                    BS);
             }
         }
 
         /* copy y from device back into host memory */
-        alpaka::mem::view::copy(streamAcc, hostYBlockPlain, deviceYBlock, BS);
+        alpaka::mem::view::copy(queueAcc, hostYBlockPlain, deviceYBlock, BS);
 
 #if 0
         /* validate result */

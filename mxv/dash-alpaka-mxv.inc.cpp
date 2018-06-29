@@ -121,16 +121,16 @@ void product_tile_pattern(const dash::Matrix<Data,2>& A,
     using WorkDiv = alpaka::workdiv::WorkDivMembers<Dim, Size>;
 
     using Host = alpaka::acc::AccCpuSerial<Dim, Size>;
-    using StreamHost = alpaka::stream::StreamCpuSync;
+    using QueueHost = alpaka::queue::QueueCpuSync;
     using DevHost = alpaka::dev::Dev<Host>;
     using PltfHost = alpaka::pltf::Pltf<DevHost>;
 
 #ifdef USE_GPU
     using Acc = alpaka::acc::AccGpuCudaRt<Dim, Size>;
-    using StreamAcc = alpaka::stream::StreamCudaRtSync;
+    using QueueAcc = alpaka::queue::QueueCudaRtSync;
 #else
     using Acc = alpaka::acc::AccCpuOmp2Blocks<Dim, Size>;
-    using StreamAcc = alpaka::stream::StreamCpuSync;
+    using QueueAcc = alpaka::queue::QueueCpuSync;
 #endif
     using DevAcc = alpaka::dev::Dev<Acc>;
     using PltfAcc = alpaka::pltf::Pltf<DevAcc>;
@@ -138,7 +138,7 @@ void product_tile_pattern(const dash::Matrix<Data,2>& A,
     DevHost const dev_host(alpaka::pltf::getDevByIdx<PltfHost>(0u));
     DevAcc const dev_acc(alpaka::pltf::getDevByIdx<PltfAcc>(0u));
 
-    StreamAcc stream_acc(dev_acc);
+    QueueAcc queue_acc(dev_acc);
 
     BlockMultMatrixVector mult_mxv_kernel;
 
@@ -146,11 +146,11 @@ void product_tile_pattern(const dash::Matrix<Data,2>& A,
 
     alpaka::mem::buf::Buf<DevAcc, Data, Dim, Size> device_y(alpaka::mem::buf::alloc<Data, Size>(dev_acc, local_y.size()));
     alpaka::mem::view::ViewPlainPtr<DevHost, Data, Dim, Size> local_y_plain(local_y.data(), dev_host, local_y.size());
-    alpaka::mem::view::copy(stream_acc, device_y, local_y_plain, local_y.size());
+    alpaka::mem::view::copy(queue_acc, device_y, local_y_plain, local_y.size());
 
     alpaka::mem::buf::Buf<DevAcc, Data, Dim, Size> device_x(alpaka::mem::buf::alloc<Data, Size>(dev_acc, local_x.size()));
     alpaka::mem::view::ViewPlainPtr<DevHost, const Data, Dim, Size> local_x_plain(local_x.data(), dev_host, local_x.size());
-    alpaka::mem::view::copy(stream_acc, device_x, local_x_plain, local_x.size());
+    alpaka::mem::view::copy(queue_acc, device_x, local_x_plain, local_x.size());
 
     /* We need at most max_blocksize() elements on the device per block */
     alpaka::mem::buf::Buf<DevAcc, Data, Dim, Size> device_a_block(alpaka::mem::buf::alloc<Data, Size>(dev_acc, pattern.max_blocksize()));
@@ -172,7 +172,7 @@ void product_tile_pattern(const dash::Matrix<Data,2>& A,
 
         /* copy A from host memory to device */
         alpaka::mem::view::ViewPlainPtr<DevHost, const Data, Dim, Size> lblock_plain(lblock_begin, dev_host, M * N);
-        alpaka::mem::view::copy(stream_acc, device_a_block, lblock_plain, M * N);
+        alpaka::mem::view::copy(queue_acc, device_a_block, lblock_plain, M * N);
 
         WorkDiv const work_div_acc(
             alpaka::workdiv::getValidWorkDiv<Acc>(
@@ -182,18 +182,18 @@ void product_tile_pattern(const dash::Matrix<Data,2>& A,
                 false,
                 alpaka::workdiv::GridBlockExtentSubDivRestrictions::Unrestricted));
 
-        auto const mxv(alpaka::exec::create<Acc>(
+        alpaka::kernel::exec<Acc>(
+            queue_acc,
             work_div_acc,
             mult_mxv_kernel,
             alpaka::mem::view::getPtrNative(device_y),
             alpaka::mem::view::getPtrNative(device_a_block),
             alpaka::mem::view::getPtrNative(device_x),
-            M, global_coords[0], global_coords[1]));
-        alpaka::stream::enqueue(stream_acc, mxv);
+            M, global_coords[0], global_coords[1]);
     }
 
     /* copy y from device back into host memory */
-    alpaka::mem::view::copy(stream_acc, local_y_plain, device_y, local_y.size());
+    alpaka::mem::view::copy(queue_acc, local_y_plain, device_y, local_y.size());
 
     /* reduce local result vectors into global y vector */
     if (A.size() <= 1024) {

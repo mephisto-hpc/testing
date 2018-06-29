@@ -16,7 +16,7 @@ int main(int argc, char *argv[]) {
     dash::init(&argc, &argv);
 
     // Setup a dash array and fill it
-    auto arr = dash::Array<Data>(1000);
+    ArrT arr(1000);
     dash::fill(arr.begin(), arr.end(), 5.0);
 
 
@@ -25,7 +25,7 @@ int main(int argc, char *argv[]) {
     // Setup accelerator and host
     using Acc       = alpaka::acc::AccCpuSerial<Dim, Size>;
     using Host      = alpaka::acc::AccCpuSerial<Dim, Size>;
-    using StreamAcc = alpaka::stream::StreamCpuSync;
+    using QueueAcc = alpaka::queue::QueueCpuSync;
 
     using DevAcc    = alpaka::dev::Dev<Acc>;
     using DevHost   = alpaka::dev::Dev<Host>;
@@ -34,9 +34,9 @@ int main(int argc, char *argv[]) {
 
     DevAcc const devAcc(alpaka::pltf::getDevByIdx<PltfAcc>(0u));
     DevHost const devHost(alpaka::pltf::getDevByIdx<PltfHost>(0u));
-    StreamAcc stream(devAcc);
+    QueueAcc queue(devAcc);
 
-  // Context is a pair of host and accelerator used by the mpehisto::buffer
+  // Context is a pair of host and accelerator used by the mephisto::buffer
     auto ctx = mephisto::make_ctx(devHost, devAcc);
 
     // Get a local view to the array
@@ -55,5 +55,7 @@ int main(int argc, char *argv[]) {
     auto deviceBuf = buf.getDeviceDataBuffer();
 
     // Copy buf from the host to the device
-    mephisto::copy(stream, buf, deviceBuf);
+    mephisto::copy(queue, buf, deviceBuf);
+
+    return 0;
 }

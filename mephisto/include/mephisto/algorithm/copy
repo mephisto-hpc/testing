@@ -7,11 +7,11 @@
 
 namespace mephisto {
 
-template <typename StreamT, typename InBufT, typename OutBufT>
+template <typename QueueT, typename InBufT, typename OutBufT>
 typename std::enable_if<buf_traits::is_host<InBufT>::value, void>::type
-copy(StreamT &stream, InBufT &inBuf, OutBufT &outBuf) {
+copy(QueueT &queue, InBufT &inBuf, OutBufT &outBuf) {
   alpaka::vec::Vec<alpaka::dim::DimInt<1u>, size_t> const extent(inBuf.view.size());
-  alpaka::mem::view::copy(stream, inBuf.deviceBuf, inBuf.hostBuf, extent);
+  alpaka::mem::view::copy(queue, inBuf.deviceBuf, inBuf.hostBuf, extent);
 };
 }
 
