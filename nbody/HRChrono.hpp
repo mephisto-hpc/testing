@@ -3,9 +3,9 @@
 #include <chrono>
 #include <string>
 
-struct Chrono
+struct HRChrono
 {
-    Chrono()
+    HRChrono()
     : last(std::chrono::high_resolution_clock::now())
     {}
 

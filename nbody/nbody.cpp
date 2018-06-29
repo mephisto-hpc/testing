@@ -29,9 +29,10 @@
 #include <llama/llama.hpp>
 #include <random>
 
-#include "AlpakaAllocator.hpp"
-#include "AlpakaMemCopy.hpp"
-#include "Chrono.hpp"
+#include <AlpakaAllocator.hpp>
+#include <AlpakaMemCopy.hpp>
+
+#include "HRChrono.hpp"
 #include "Dummy.hpp"
 #include "Human.hpp"
 
@@ -512,7 +513,7 @@ int main(int argc,char * * argv)
         std::cout << human_readable(size * (problemSize * llama::SizeOf<Particle>::value)) << ")\n";
     }
 
-    Chrono chrono;
+    HRChrono chrono;
 
     particles.allocate(size * problemSize);
     auto   hostView = LocalFactory::allocView( mapping, particles.lbegin() );

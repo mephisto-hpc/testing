@@ -12,6 +12,7 @@ LIST(APPEND CMAKE_PREFIX_PATH "${LLAMA_ROOT}")
 
 find_package(llama 0.1.0 REQUIRED)
 set(INCLUDE_DIRS ${INCLUDE_DIRS} ${llama_INCLUDE_DIR})
+set(INCLUDE_DIRS ${INCLUDE_DIRS} ${LLAMA_ROOT}/examples/common)
 add_definitions(${llama_DEFINITIONS})
 
 set(ALPAKA_ROOT "${CMAKE_CURRENT_LIST_DIR}/../alpaka/" CACHE STRING  "The location of the alpaka library")
