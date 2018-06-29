@@ -30,6 +30,7 @@
 #include <random>
 
 #include "AlpakaAllocator.hpp"
+#include "AlpakaMemCopy.hpp"
 #include "Chrono.hpp"
 #include "Dummy.hpp"
 #include "Human.hpp"
@@ -491,6 +492,14 @@ int main(int argc,char * * argv)
             Mapping
         >
     >;
+    using HostFactory = llama::Factory<
+        Mapping,
+        nbody::allocator::Alpaka<
+            DevHost,
+            Dim,
+            Size
+        >
+    >;
     using LocalFactory = llama::Factory<
         Mapping,
         PassThroughAllocator<
@@ -500,7 +509,7 @@ int main(int argc,char * * argv)
 
     if (myid == 0) {
         std::cout << (size * problemSize) / 1000 << " thousand particles (";
-        std::cout << human_readable(size * problemSize * llama::SizeOf<Particle>::value) << ")\n";
+        std::cout << human_readable(size * (problemSize * llama::SizeOf<Particle>::value)) << ")\n";
     }
 
     Chrono chrono;
@@ -510,6 +519,8 @@ int main(int argc,char * * argv)
     auto    devView =    DevFactory::allocView( mapping,  devAcc );
     auto mirrowView = MirrorFactory::allocView( mapping, devView );
 
+    // will be used as double buffer for remote->host and host->device copying
+    auto   remoteHostView =   HostFactory::allocView( mapping, devHost );
     auto    remoteDevView =    DevFactory::allocView( mapping,  devAcc );
     auto remoteMirrowView = MirrorFactory::allocView( mapping, devView );
 
@@ -541,6 +552,15 @@ int main(int argc,char * * argv)
     }
 
     chrono.printAndReset("Init:");
+
+    alpaka::mem::view::ViewPlainPtr<DevHost, unsigned char, Dim, Size> hostPlain(
+        reinterpret_cast<unsigned char*>(particles.lbegin()), devHost, problemSize * llama::SizeOf<Particle>::value);
+    alpaka::mem::view::copy(queue,
+        devView.blob[0].buffer,
+        hostPlain,
+        problemSize * llama::SizeOf<Particle>::value);
+
+    chrono.printAndReset("Copy H->D");
 
     const alpaka::vec::Vec< Dim, Size > elems (
         static_cast< Size >( elemCount )
@@ -592,13 +612,15 @@ int main(int argc,char * * argv)
         {
             dart_unit_t remote = (myid + unit_it) % size;
 
-            // get remote local block into remoteMirrorView
+            // get remote local block into remoteHostView
             auto remote_begin = particles.begin() + (remote * problemSize);
             auto remote_end   = remote_begin + problemSize;
-            auto target_begin = reinterpret_cast<particle*>(remoteMirrowView.blob[0]);
+            auto target_begin = reinterpret_cast<particle*>(alpaka::mem::view::getPtrNative(remoteHostView.blob[0].buffer));
             dash::copy(remote_begin, remote_end, target_begin);
 
             chrono.printAndReset("Copy from remote:    ");
+
+            alpakaMemCopy( remoteDevView, remoteHostView, userDomainSize, queue );
 
             alpaka::kernel::exec< Acc > (
                 queue,
@@ -624,6 +646,13 @@ int main(int argc,char * * argv)
 
         particles.barrier();
     }
+
+    alpaka::mem::view::copy(queue,
+        hostPlain,
+        devView.blob[0].buffer,
+        problemSize * llama::SizeOf<Particle>::value);
+
+    chrono.printAndReset("Copy D->H");
 
     dash::finalize();
 
