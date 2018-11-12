@@ -18,7 +18,7 @@ struct array
     template<
         typename TInput
     >
-    ALPAKA_FN_HOST
+    ALPAKA_FN_HOST_ACC
     array(TInput inputArr) {
         size_t i = 0;
         for (auto extent : inputArr) {
@@ -26,11 +26,14 @@ struct array
         }
     }
 
+    ALPAKA_FN_HOST_ACC
     array() = default;
 
-    array(array<TType, TSize> &) = default;
+    ALPAKA_FN_HOST_ACC
+    array(const array &) = default;
 
-    array(array<TType, TSize> &&) = default;
+    ALPAKA_FN_HOST_ACC
+    array(array &&) = default;
 
     ALPAKA_FN_HOST_ACC
     array(std::initializer_list<TType> ilist) {
@@ -56,6 +59,14 @@ struct array
     operator[](const TIdx idx) noexcept {
         return m_data[idx];
     }
+
+    ALPAKA_FN_HOST_ACC const TType *begin() {
+        return m_data;
+    };
+
+    ALPAKA_FN_HOST_ACC const TType *end() {
+        return m_data + size();
+    };
 
     constexpr
     ALPAKA_FN_HOST_ACC size_t

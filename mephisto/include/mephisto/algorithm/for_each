@@ -1,18 +1,40 @@
 #ifndef MEPHISTO_ALGORITHM_FOR_EACH
 #define MEPHISTO_ALGORITHM_FOR_EACH
 
+#include <alpaka/alpaka.hpp>
+#include <libdash.h>
+#include <mephisto/buffer>
+
 namespace mephisto {
 
+struct ForEachWithIndexKernel {
+  template <typename AccT, typename BufT, typename SizeT, typename Func>
+  ALPAKA_FN_ACC auto operator()(
+      AccT const&  acc,
+      BufT         buf,
+      SizeT const& numElements,
+      Func         executorFunc) const -> void
+  {
+    auto const gridThreadIdx(
+        alpaka::idx::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0u]);
+    auto const threadElemExtent(
+        alpaka::workdiv::getWorkDiv<alpaka::Thread, alpaka::Elems>(acc)[0u]);
+    auto const threadFirstElemIdx(gridThreadIdx * threadElemExtent);
 
-template <
-    typename IterT,
-    typename UnaryFunction>
-    void for_each(
-        IterT first,
-        IterT last,
-        UnaryFunction f) {
+    if (threadFirstElemIdx < numElements) {
+      auto const threadLastElemIdx(threadFirstElemIdx + threadElemExtent);
+      auto const threadLastElemIdxClipped(
+          (numElements > threadLastElemIdx) ? threadLastElemIdx
+                                            : numElements);
 
+      for (SizeT i = threadFirstElemIdx; i < threadLastElemIdxClipped; ++i) {
+        auto &meta = buf.getMeta();
+        auto coords = meta.global_coords(i);
+        executorFunc(buf.begin(), i, coords, NULL);
+      }
     }
+  }
+};
 
 }
 #endif

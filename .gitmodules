@@ -4,5 +4,8 @@
 	branch = develop
 [submodule "dash"]
 	path = dash
-	url = git@github.com:dash-project/dash.git
-	branch = feat-192-nviews
+	url = git@github.com:mephisto-hpc/dash.git
+	branch = mephisto
+[submodule "gtest"]
+	path = gtest
+	url = https://github.com/google/googletest.git
