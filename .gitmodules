@@ -1,12 +1,12 @@
 [submodule "alpaka"]
 	path = alpaka
-	url = git@github.com:ComputationalRadiationPhysics/alpaka.git
+	url = https://github.com/mephisto-hpc/alpaka.git
 	branch = develop
 [submodule "dash"]
 	path = dash
-	url = git@github.com:dash-project/dash.git
-	branch = feat-192-nviews
+	url = https://github.com/dash-project/dash.git
+	branch = development
 [submodule "llama"]
 	path = llama
-	url = git@github.com:ComputationalRadiationPhysics/llama.git
-	branch = master
+	url = https://github.com/mephisto-hpc/llama.git
+	branch = develop
