@@ -607,13 +607,13 @@ int main(int argc,char * * argv)
         chrono.printAndReset("Move kernel:         ");
         dummy( static_cast<void*>( mirrowView.blob[0] ) );
 
+        alpaka::mem::view::copy(queue,
+            hostPlain,
+            devView.blob[0].buffer,
+            problemSize * llama::SizeOf<Particle>::value);
+
         particles.barrier();
     }
-
-    alpaka::mem::view::copy(queue,
-        hostPlain,
-        devView.blob[0].buffer,
-        problemSize * llama::SizeOf<Particle>::value);
 
     chrono.printAndReset("Copy D->H");
 
