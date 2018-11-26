@@ -119,7 +119,7 @@ template<
 >
 struct BlockSharedMemoryAllocator
 {
-    using type = nbody::allocator::AlpakaShared<
+    using type = common::allocator::AlpakaShared<
         T_Acc,
         T_size,
         T_counter
@@ -209,7 +209,7 @@ struct UpdateKernel
 
 #if NBODY_USE_SHARED_TREE == 1
         auto treeOperationList = llama::makeTuple(
-            llama::mapping::tree::functor::LeaveOnlyRT( )
+            llama::mapping::tree::functor::LeafOnlyRT( )
         );
         using SharedMapping = llama::mapping::tree::Mapping<
             typename decltype(remoteParticles)::Mapping::UserDomain,
@@ -457,7 +457,7 @@ int main(int argc,char * * argv)
 
 #if NBODY_USE_TREE == 1
     auto treeOperationList = llama::makeTuple(
-        llama::mapping::tree::functor::LeaveOnlyRT( )
+        llama::mapping::tree::functor::LeafOnlyRT( )
     );
     using Mapping = llama::mapping::tree::Mapping<
         UserDomain,
@@ -478,26 +478,23 @@ int main(int argc,char * * argv)
 
     using DevFactory = llama::Factory<
         Mapping,
-        nbody::allocator::Alpaka<
+        common::allocator::Alpaka<
             DevAcc,
-            Dim,
             Size
         >
     >;
     using MirrorFactory = llama::Factory<
         Mapping,
-        nbody::allocator::AlpakaMirror<
+        common::allocator::AlpakaMirror<
             DevAcc,
-            Dim,
             Size,
             Mapping
         >
     >;
     using HostFactory = llama::Factory<
         Mapping,
-        nbody::allocator::Alpaka<
+        common::allocator::Alpaka<
             DevHost,
-            Dim,
             Size
         >
     >;
