@@ -3,10 +3,11 @@
 
 #include <libdash.h>
 
+#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
+#define NBODY_CUDA 1
+#else
 #define NBODY_CUDA 0
-#define NBODY_USE_TREE 1
-#define NBODY_USE_SHARED 1
-#define NBODY_USE_SHARED_TREE 1
+#endif
 
 #define NBODY_PROBLEM_SIZE 16*1024
 #define NBODY_BLOCK_SIZE 256
@@ -196,7 +197,6 @@ struct UpdateKernel
     ) const
     {
 
-#if NBODY_USE_SHARED == 1
         constexpr std::size_t threads = blockSize / elems;
         using SharedAllocator = BlockSharedMemoryAllocator<
             T_Acc,
@@ -207,26 +207,11 @@ struct UpdateKernel
         >;
 
 
-#if NBODY_USE_SHARED_TREE == 1
-        auto treeOperationList = llama::makeTuple(
-            llama::mapping::tree::functor::LeafOnlyRT( )
-        );
-        using SharedMapping = llama::mapping::tree::Mapping<
-            typename decltype(remoteParticles)::Mapping::UserDomain,
-            typename decltype(remoteParticles)::Mapping::DatumDomain,
-            decltype( treeOperationList )
-        >;
-        SharedMapping const sharedMapping(
-            { blockSize },
-            treeOperationList
-        );
-#else
         using SharedMapping = llama::mapping::SoA<
             typename decltype(remoteParticles)::Mapping::UserDomain,
             typename decltype(remoteParticles)::Mapping::DatumDomain
         >;
         SharedMapping const sharedMapping( { blockSize } );
-#endif // NBODY_USE_SHARED_TREE
 
         using SharedFactory = llama::Factory<
             SharedMapping,
@@ -237,7 +222,6 @@ struct UpdateKernel
             SharedFactory,
             SharedMapping
         >( sharedMapping, acc );
-#endif // NBODY_USE_SHARED
 
         auto threadIndex  = alpaka::idx::getIdx<
             alpaka::Grid,
@@ -259,7 +243,7 @@ struct UpdateKernel
                 start2 + blockSize,
                 problemSize
             ) - start2;
-#if NBODY_USE_SHARED == 1
+
             LLAMA_INDEPENDENT_DATA
             for (
                 auto pos2 = decltype(end2)(0);
@@ -267,18 +251,14 @@ struct UpdateKernel
                 pos2 += threads
             )
                 temp(pos2 + threadIndex) = remoteParticles( start2 + pos2 + threadIndex );
-#endif // NBODY_USE_SHARED
+
             LLAMA_INDEPENDENT_DATA
             for ( auto pos2 = decltype(end2)(0); pos2 < end2; ++pos2 )
                 LLAMA_INDEPENDENT_DATA
                 for ( auto pos = start; pos < end; ++pos )
                     pPInteraction(
                         localParticles( pos ),
-#if NBODY_USE_SHARED == 1
                         temp( pos2 ),
-#else
-                        remoteParticles( start2 + pos2 ),
-#endif // NBODY_USE_SHARED
                         ts
                     );
         };
@@ -455,26 +435,11 @@ int main(int argc,char * * argv)
     using UserDomain = llama::UserDomain< 1 >;
     const UserDomain userDomainSize{ problemSize };
 
-#if NBODY_USE_TREE == 1
-    auto treeOperationList = llama::makeTuple(
-        llama::mapping::tree::functor::LeafOnlyRT( )
-    );
-    using Mapping = llama::mapping::tree::Mapping<
-        UserDomain,
-        Particle,
-        decltype( treeOperationList )
-    >;
-    const Mapping mapping(
-        userDomainSize,
-        treeOperationList
-    );
-#else
     using Mapping = llama::mapping::SoA<
         UserDomain,
         Particle
     >;
     Mapping const mapping( userDomainSize );
-#endif // NBODY_USE_TREE
 
     using DevFactory = llama::Factory<
         Mapping,
