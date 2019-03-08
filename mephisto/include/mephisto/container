@@ -1,0 +1,93 @@
+#ifndef MEPHISTO_CONTAINER
+#define MEPHISTO_CONTAINER
+
+#include <llama/llama.hpp>
+
+namespace mephisto {
+
+namespace container {
+
+namespace factory {
+
+struct std_vector
+{
+    template<
+        typename value_type
+    >
+    using container_type = std::vector<value_type>;
+};
+
+template<
+    size_t N
+>
+struct std_array
+{
+    template<
+        typename value_type
+    >
+    using container_type = std::array<value_type, N>;
+};
+
+} /* factory */
+
+/**
+ * The container factory can be used to create containers with a LLAMA value type.
+ *
+ * @tparam ContainerFactoryT The container factory. Should have one sub-type
+ *                           named `container_type` with one template argument
+ *                           for the value type.
+ * @tparam DatumDomainT      The LLAMA datum domain type.
+ * @tparam MappingT          The LLAMA mapping to use.
+ */
+template<
+    typename ContainerFactoryT,
+
+    typename DatumDomainT,
+
+    template<
+        typename,
+        typename,
+        typename...
+    >
+    typename MappingT
+>
+struct llama_factory
+{
+    struct container_value_type
+        : public ::llama::StubType<DatumDomainT>
+    {
+        using container_factory_type = ContainerFactoryT;
+        using container_type =
+            typename container_factory_type::
+                template container_type<
+                    container_value_type
+                >;
+        using mapping_type = MappingT<
+            ::llama::UserDomain<1>,
+            DatumDomainT
+        >;
+    };
+
+    /**
+     * Creates an instance of the container.
+     *
+     * @param args...        Arguments assed on to the constructor.
+     * @return               Object of the container.
+     */
+    template<
+        typename... ContainerCtorArgsT
+    >
+    static
+    auto
+    create(ContainerCtorArgsT... args)
+    -> typename container_value_type::container_type
+    {
+        return std::move(typename container_value_type::container_type(args...));
+    }
+};
+
+} /* container */
+
+} /* mephisto */
+
+#endif /* MEPHISTO_CONTAINER */
