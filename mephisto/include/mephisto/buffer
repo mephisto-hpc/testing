@@ -200,13 +200,13 @@ struct HostDataBuffer {
         DeviceT,
         MetaT,
         alpaka::dim::Dim<std::size_t>,
-        alpaka::size::Size<std::size_t>>
+        alpaka::idx::Idx<std::size_t>>
     getDeviceMetaView()
     {
       auto devicePtr = alpaka::mem::view::getPtrNative(deviceBuf);
       return alpaka::mem::view::ViewPlainPtr<DeviceT, MetaT,
                                              alpaka::dim::Dim<std::size_t>,
-                                             alpaka::size::Size<std::size_t>>(
+                                             alpaka::idx::Idx<std::size_t>>(
           reinterpret_cast<MetaT *>(devicePtr), context.accDevice, static_cast<std::size_t>(1));
     }
 
@@ -214,7 +214,7 @@ struct HostDataBuffer {
         HostT,
         MetaT,
         alpaka::dim::Dim<std::size_t>,
-        alpaka::size::Size<std::size_t>>
+        alpaka::idx::Idx<std::size_t>>
     getHostMetaView()
     {
       return alpaka::mem::view::createStaticDevMemView(
@@ -222,12 +222,12 @@ struct HostDataBuffer {
     }
 
     alpaka::mem::view::
-        ViewPlainPtr<DeviceT, NonConstElementT, alpaka::dim::Dim<std::size_t>, alpaka::size::Size<std::size_t>>
+        ViewPlainPtr<DeviceT, NonConstElementT, alpaka::dim::Dim<std::size_t>, alpaka::idx::Idx<std::size_t>>
         getDeviceDataView()
     {
       return alpaka::mem::view::ViewPlainPtr<DeviceT, NonConstElementT,
                                              alpaka::dim::Dim<std::size_t>,
-                                             alpaka::size::Size<std::size_t>>(
+                                             alpaka::idx::Idx<std::size_t>>(
           reinterpret_cast<NonConstElementT *>(
               reinterpret_cast<char *>(
                   alpaka::mem::view::getPtrNative(deviceBuf)) +

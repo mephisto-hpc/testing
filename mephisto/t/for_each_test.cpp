@@ -22,12 +22,12 @@ TEST_F(ForEachTest, itWorks) {
   dash::fill(arr.begin(), arr.end(), {42, 42, 42});
     DevAcc const devAcc(alpaka::pltf::getDevByIdx<PltfAcc>(0u));
     DevHost const devHost(alpaka::pltf::getDevByIdx<PltfHost>(0u));
-    StreamAcc stream(devAcc);
+    QueueAcc queue(devAcc);
 
     // Setup of the executor:
     //
-    // Context consists of the host, the accelerator and the stream
-    auto ctx = mephisto::execution::make_context<Acc>(devHost, devAcc, stream);
+    // Context consists of the host, the accelerator and the queue
+    auto ctx = mephisto::execution::make_context<Acc>(devHost, devAcc, queue);
 
     // The executor is the one actually doing the computation
     mephisto::execution::AlpakaTwoWayExecutor<Kernel, decltype(ctx)> executor(ctx);

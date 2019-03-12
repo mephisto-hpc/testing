@@ -18,7 +18,7 @@ using Data = Pos;
 class ForEachTest : public ::testing::Test {
 
 public:
-  static const int Dim        = 3;
+  static const int Dim = 3;
   using Data       = Pos;
   using PatternT   = dash::BlockPattern<Dim>;
   using MetaT      = typename mephisto::Metadata<PatternT>;
@@ -30,10 +30,10 @@ public:
 // Setup accelerator and host
 #ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
   using Acc       = alpaka::acc::AccGpuCudaRt<AlpakaDim, SizeT>;
-  using StreamAcc = alpaka::stream::StreamCudaRtSync;
+  using QueueAcc  = alpaka::queue::QueueCudaRtSync;
 #else
   using Acc       = alpaka::acc::AccCpuSerial<AlpakaDim, SizeT>;
-  using StreamAcc = alpaka::stream::StreamCpuSync;
+  using QueueAcc  = alpaka::queue::QueueCpuSync;
 #endif
   using Host = alpaka::acc::AccCpuSerial<AlpakaDim, SizeT>;
 

@@ -1,15 +1,15 @@
 [submodule "alpaka"]
 	path = alpaka
 	url = https://github.com/mephisto-hpc/alpaka.git
-	branch = develop
+	branch = mephisto
 [submodule "dash"]
 	path = dash
 	url = git@github.com:mephisto-hpc/dash.git
 	branch = mephisto
-[submodule "gtest"]
-	path = gtest
-	url = https://github.com/google/googletest.git
 [submodule "llama"]
 	path = llama
 	url = https://github.com/mephisto-hpc/llama.git
 	branch = develop
+[submodule "gtest"]
+	path = gtest
+	url = https://github.com/google/googletest.git

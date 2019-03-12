@@ -36,6 +36,7 @@ struct AlpakaExecutor {
     {
         using ElementT = typename IterT::value_type;
         using PatternT = typename IterT::pattern_type;
+        using GlobMemT = typename IterT::memory_type;
 
         // ---------------------------------------------
         // Copy data to the accelerator
@@ -61,29 +62,24 @@ struct AlpakaExecutor {
             ElementT,
             AlpakaContext,
             PatternT,
-            dash::GlobIter<ElementT, PatternT>>(ctx, begin, end);
-
+            dash::GlobIter<ElementT, PatternT, GlobMemT>>(ctx, begin, end);
 
         // copy the buffer to the device
-        mephisto::put(ctx.stream, hostBuf);
+        mephisto::put(ctx.queue, hostBuf);
 
         // get the buffer on the device
         auto deviceBuf = hostBuf.getDeviceDataBuffer();
 
         Kernel kernel;
 
-        // ---------------------------------------------
-        // Execute the kernel
-        // ---------------------------------------------
-        //
-        auto const forEach(alpaka::exec::create<Acc>(
+        auto const forEach(alpaka::kernel::createTaskKernel<Acc>(
             workDiv, kernel, deviceBuf, nelems, executorFunc));
 
-        alpaka::stream::enqueue(ctx.stream, forEach);
+        alpaka::queue::enqueue(ctx.queue, forEach);
 
         if (CopyBack) {
           // copy the buffer to the device
-          mephisto::get(ctx.stream, hostBuf);
+          mephisto::get(ctx.queue, hostBuf);
         }
     }
 
@@ -104,7 +100,7 @@ using AlpakaOneWayExecutor = AlpakaExecutor<Kernel, AlpakaContext, false>;
 template <class Kernel, class AlpakaContext>
 using AlpakaTwoWayExecutor = AlpakaExecutor<Kernel, AlpakaContext, true>;
 
-template <class AccT, class HostDevice, class AccDevice, class Stream>
+template <class AccT, class HostDevice, class AccDevice, class Queue>
 struct AlpakaExecutionContext {
   using host_t   = typename std::remove_cv<HostDevice>::type;
   using device_t = typename std::remove_cv<AccDevice>::type;
@@ -112,22 +108,22 @@ struct AlpakaExecutionContext {
 
   HostDevice &hostDevice;
   AccDevice & accDevice;
-  Stream &    stream;
+  Queue &     queue;
 
-  AlpakaExecutionContext(HostDevice &host, AccDevice &acc, Stream &stream)
+  AlpakaExecutionContext(HostDevice &host, AccDevice &acc, Queue &queue)
     : hostDevice(host)
     , accDevice(acc)
-    , stream(stream)
+    , queue(queue)
   {
   }
 };
 
-template <class AccT, class HostDevice, class AccDevice, class Stream>
-AlpakaExecutionContext<AccT, HostDevice, AccDevice, Stream> make_context(
-    HostDevice &host, AccDevice &acc, Stream &stream)
+template <class AccT, class HostDevice, class AccDevice, class Queue>
+AlpakaExecutionContext<AccT, HostDevice, AccDevice, Queue> make_context(
+    HostDevice &host, AccDevice &acc, Queue &queue)
 {
-    return AlpakaExecutionContext<AccT, HostDevice, AccDevice, Stream>(
-        host, acc, stream);
+    return AlpakaExecutionContext<AccT, HostDevice, AccDevice, Queue>(
+        host, acc, queue);
 }
 
 // See C++17's std::execution::par
