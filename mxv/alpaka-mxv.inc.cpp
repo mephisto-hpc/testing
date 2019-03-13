@@ -15,7 +15,7 @@ struct HostInitBlockMatrix
         typename TData,
         typename TExtent,
         typename TBlockGrid>
-    ALPAKA_FN_ACC_NO_CUDA auto operator()(
+    auto operator()(
         TAcc const & acc,
         TData * block,
         TExtent const & extents,
@@ -74,7 +74,7 @@ struct HostInitBlockVector
         typename TData,
         typename TSize,
         typename TExtent>
-    ALPAKA_FN_ACC_NO_CUDA auto operator()(
+    auto operator()(
         TAcc const & acc,
         TData * block,
         TData initValue,

@@ -120,10 +120,11 @@ void product_tile_pattern(const dash::Matrix<Data,2>& A,
     using Dim = alpaka::dim::DimInt<1>;
     using WorkDiv = alpaka::workdiv::WorkDivMembers<Dim, Size>;
 
-    using Host = alpaka::acc::AccCpuSerial<Dim, Size>;
-    using QueueHost = alpaka::queue::QueueCpuSync;
-    using DevHost = alpaka::dev::Dev<Host>;
+    using DevHost = alpaka::dev::DevCpu;
     using PltfHost = alpaka::pltf::Pltf<DevHost>;
+    DevHost dev_host(alpaka::pltf::getDevByIdx<PltfHost>(0u));
+    using ViewHost = alpaka::mem::view::ViewPlainPtr<DevHost, Data, Dim, Size>;
+    using ConstViewHost = alpaka::mem::view::ViewPlainPtr<DevHost, const Data, Dim, Size>;
 
 #ifdef USE_GPU
     using Acc = alpaka::acc::AccGpuCudaRt<Dim, Size>;
@@ -134,26 +135,25 @@ void product_tile_pattern(const dash::Matrix<Data,2>& A,
 #endif
     using DevAcc = alpaka::dev::Dev<Acc>;
     using PltfAcc = alpaka::pltf::Pltf<DevAcc>;
+    using BufAcc = alpaka::mem::buf::Buf<DevAcc, Data, Dim, Size>;
 
-    DevHost const dev_host(alpaka::pltf::getDevByIdx<PltfHost>(0u));
     DevAcc const dev_acc(alpaka::pltf::getDevByIdx<PltfAcc>(0u));
-
     QueueAcc queue_acc(dev_acc);
 
     BlockMultMatrixVector mult_mxv_kernel;
 
     /* vector x and y are the whole time on the device */
 
-    alpaka::mem::buf::Buf<DevAcc, Data, Dim, Size> device_y(alpaka::mem::buf::alloc<Data, Size>(dev_acc, local_y.size()));
-    alpaka::mem::view::ViewPlainPtr<DevHost, Data, Dim, Size> local_y_plain(local_y.data(), dev_host, local_y.size());
+    BufAcc device_y(alpaka::mem::buf::alloc<Data, Size>(dev_acc, local_y.size()));
+    ViewHost local_y_plain(local_y.data(), dev_host, local_y.size());
     alpaka::mem::view::copy(queue_acc, device_y, local_y_plain, local_y.size());
 
-    alpaka::mem::buf::Buf<DevAcc, Data, Dim, Size> device_x(alpaka::mem::buf::alloc<Data, Size>(dev_acc, local_x.size()));
-    alpaka::mem::view::ViewPlainPtr<DevHost, const Data, Dim, Size> local_x_plain(local_x.data(), dev_host, local_x.size());
+    BufAcc device_x(alpaka::mem::buf::alloc<Data, Size>(dev_acc, local_x.size()));
+    ConstViewHost local_x_plain(local_x.data(), dev_host, local_x.size());
     alpaka::mem::view::copy(queue_acc, device_x, local_x_plain, local_x.size());
 
     /* We need at most max_blocksize() elements on the device per block */
-    alpaka::mem::buf::Buf<DevAcc, Data, Dim, Size> device_a_block(alpaka::mem::buf::alloc<Data, Size>(dev_acc, pattern.max_blocksize()));
+    BufAcc device_a_block(alpaka::mem::buf::alloc<Data, Size>(dev_acc, pattern.max_blocksize()));
 
     auto lblocks = pattern.local_blockspec().size();
     for (size_t lblock_idx = 0; lblock_idx < lblocks; lblock_idx++ ) {
@@ -171,7 +171,7 @@ void product_tile_pattern(const dash::Matrix<Data,2>& A,
         Size N = lblock_view.extent(1);
 
         /* copy A from host memory to device */
-        alpaka::mem::view::ViewPlainPtr<DevHost, const Data, Dim, Size> lblock_plain(lblock_begin, dev_host, M * N);
+        ConstViewHost lblock_plain(lblock_begin, dev_host, M * N);
         alpaka::mem::view::copy(queue_acc, device_a_block, lblock_plain, M * N);
 
         WorkDiv const work_div_acc(

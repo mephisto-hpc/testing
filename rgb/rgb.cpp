@@ -137,19 +137,19 @@ main(int ac, char* av[])
     using Dim = alpaka::dim::DimInt< 2 >;
     using Size = std::size_t;
     using Extents = Size;
-    using Host = alpaka::acc::AccCpuSerial<Dim, Size>;
+
+    using DevHost = alpaka::dev::DevCpu;
+    using PltfHost = alpaka::pltf::Pltf<DevHost>;
+
 #if 1
     using Acc = alpaka::acc::AccCpuOmp2Blocks<Dim, Size>;
 #else
     using Acc = alpaka::acc::AccCpuOmp2Threads<Dim, Size>;
 #endif
-    using DevHost = alpaka::dev::Dev<Host>;
+    using Queue = alpaka::queue::QueueCpuSync;
     using DevAcc = alpaka::dev::Dev<Acc>;
-    using PltfHost = alpaka::pltf::Pltf<DevHost>;
     using PltfAcc = alpaka::pltf::Pltf<DevAcc>;
     using WorkDiv = alpaka::workdiv::WorkDivMembers<Dim, Size>;
-    using Queue = alpaka::queue::QueueCpuSync;
-    //using Queue = alpaka::queue::QueueCudaRtSync;
 
     DevAcc const devAcc(alpaka::pltf::getDevByIdx<PltfAcc>(0u));
     DevHost const devHost(alpaka::pltf::getDevByIdx<PltfHost>(0u));

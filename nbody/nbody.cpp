@@ -385,7 +385,9 @@ int main(int argc,char * * argv)
     using Dim = alpaka::dim::DimInt< 1 >;
     using Size = std::size_t;
     using Extents = Size;
-    using Host = alpaka::acc::AccCpuSerial<Dim, Size>;
+
+    using DevHost = alpaka::dev::DevCpu;
+    using PltfHost = alpaka::pltf::Pltf<DevHost>;
 
 #if NBODY_CUDA == 1
     using Acc = alpaka::acc::AccGpuCudaRt<Dim, Size>;
@@ -395,9 +397,8 @@ int main(int argc,char * * argv)
     //~ using Acc = alpaka::acc::AccCpuOmp2Threads<Dim, Size>;
     //~ using Acc = alpaka::acc::AccCpuOmp4<Dim, Size>;
 #endif // NBODY_CUDA
-    using DevHost = alpaka::dev::Dev<Host>;
+
     using DevAcc = alpaka::dev::Dev<Acc>;
-    using PltfHost = alpaka::pltf::Pltf<DevHost>;
     using PltfAcc = alpaka::pltf::Pltf<DevAcc>;
     using WorkDiv = alpaka::workdiv::WorkDivMembers<Dim, Size>;
 #if NBODY_CUDA == 1
@@ -407,7 +408,7 @@ int main(int argc,char * * argv)
 #endif // NBODY_CUDA
     DevAcc const devAcc( alpaka::pltf::getDevByIdx< PltfAcc >( 0u ) );
     DevHost const devHost( alpaka::pltf::getDevByIdx< PltfHost >( 0u ) );
-    Queue queue( devAcc ) ;
+    Queue queue( devAcc );
 
     dash::init(&argc, &argv);
 

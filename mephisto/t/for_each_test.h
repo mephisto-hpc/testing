@@ -27,6 +27,9 @@ public:
   using ArrayT     = dash::Array<Data, dash::default_index_t, PatternT>;
   using SizeT      = ArrayT::size_type;
 
+  using DevHost  = alpaka::dev::DevCpu;
+  using PltfHost = alpaka::pltf::Pltf<DevHost>;
+
 // Setup accelerator and host
 #ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
   using Acc       = alpaka::acc::AccGpuCudaRt<AlpakaDim, SizeT>;
@@ -35,11 +38,7 @@ public:
   using Acc       = alpaka::acc::AccCpuSerial<AlpakaDim, SizeT>;
   using QueueAcc  = alpaka::queue::QueueCpuSync;
 #endif
-  using Host = alpaka::acc::AccCpuSerial<AlpakaDim, SizeT>;
-
   using DevAcc   = alpaka::dev::Dev<Acc>;
-  using DevHost  = alpaka::dev::Dev<Host>;
-  using PltfHost = alpaka::pltf::Pltf<DevHost>;
   using PltfAcc  = alpaka::pltf::Pltf<DevAcc>;
 
   // The mephisto kernel to use in the executor
