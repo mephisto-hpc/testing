@@ -30,6 +30,14 @@ struct std_array
 
 } /* factory */
 
+template<
+    typename T
+>
+struct dimensionality
+{
+    static const std::size_t value = 1;
+};
+
 /**
  * The container factory can be used to create containers with a LLAMA value type.
  *
@@ -63,7 +71,11 @@ struct llama_factory
                     container_value_type
                 >;
         using mapping_type = MappingT<
-            ::llama::UserDomain<1>,
+            ::llama::UserDomain<
+                mephisto::container::dimensionality<
+                    container_factory_type
+                >::value
+            >,
             DatumDomainT
         >;
     };
