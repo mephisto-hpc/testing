@@ -48,3 +48,6 @@ ENDIF()
 ALPAKA_ADD_EXECUTABLE(
     llama_container
     "llama_container.cpp")
+TARGET_LINK_LIBRARIES(
+    llama_container
+    PUBLIC "${DASH_LIBRARIES}")

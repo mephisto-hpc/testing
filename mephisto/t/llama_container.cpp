@@ -2,6 +2,7 @@
 #include <vector>
 
 #include <llama/llama.hpp>
+#include <libdash.h>
 
 #include <mephisto/container>
 
@@ -14,7 +15,7 @@ namespace st
 }
 
 int
-main()
+main(int ac, char* av[])
 {
     using RGB = llama::DS<
         llama::DE< st::R, double >,
@@ -38,11 +39,29 @@ main()
         llama::mapping::SoA
     >::create(16 * 16);
 
-    auto v2 = mephisto::container::llama_factory<
+    auto a0 = mephisto::container::llama_factory<
         mephisto::container::factory::std_array<5>,
         V,
         llama::mapping::AoS
     >::create();
+
+    dash::init(&ac, &av);
+
+    auto a1 = mephisto::container::llama_factory<
+        mephisto::container::factory::dash_Array,
+        RGB,
+        llama::mapping::SoA
+    >::create();
+
+    a1.allocate(100);
+
+    auto a2 = mephisto::container::llama_factory<
+        mephisto::container::factory::dash_Array,
+        RGB,
+        llama::mapping::AoS
+    >::create(100);
+
+    dash::finalize();
 
     return 0;
 }

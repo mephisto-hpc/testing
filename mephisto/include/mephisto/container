@@ -28,6 +28,18 @@ struct std_array
     using container_type = std::array<value_type, N>;
 };
 
+#ifdef DASH__LIBDASH_H_
+
+struct dash_Array
+{
+    template<
+        typename value_type
+    >
+    using container_type = dash::Array<value_type>;
+};
+
+#endif
+
 } /* factory */
 
 template<
