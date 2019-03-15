@@ -38,6 +38,39 @@ struct dash_Array
     using container_type = dash::Array<value_type>;
 };
 
+template<
+    dash::dim_t NumDimensions,
+    typename    IndexT         = dash::default_index_t,
+    class       PatternT       = dash::TilePattern<NumDimensions, dash::ROW_MAJOR, IndexT>,
+    typename    LocalMemSpaceT = dash::HostSpace
+>
+struct dash_Matrix
+{
+    template<
+        typename ElementT
+    >
+    using container_type = dash::Matrix<
+        ElementT,
+        NumDimensions,
+        IndexT,
+        PatternT,
+        LocalMemSpaceT
+    >;
+};
+
+template <
+  dash::dim_t NumDimensions,
+  typename    IndexT         = dash::default_index_t,
+  class       PatternT       = dash::Pattern<NumDimensions, dash::ROW_MAJOR, IndexT>,
+  typename    LocalMemSpaceT = dash::HostSpace
+>
+using dash_NArray = dash_Matrix<
+    NumDimensions,
+    IndexT,
+    PatternT,
+    LocalMemSpaceT
+>;
+
 #endif
 
 } /* factory */
@@ -49,6 +82,20 @@ struct dimensionality
 {
     static const std::size_t value = 1;
 };
+
+#ifdef DASH__LIBDASH_H_
+
+template<
+    dash::dim_t NumDimensions
+>
+struct dimensionality<
+    factory::dash_Matrix<NumDimensions>
+>
+{
+    static const std::size_t value = static_cast<std::size_t>(NumDimensions);
+};
+
+#endif
 
 /**
  * The container factory can be used to create containers with a LLAMA value type.

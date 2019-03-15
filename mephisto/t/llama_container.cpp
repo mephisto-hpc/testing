@@ -61,6 +61,31 @@ main(int ac, char* av[])
         llama::mapping::AoS
     >::create(100);
 
+    auto m0 = mephisto::container::llama_factory<
+        mephisto::container::factory::dash_Matrix<2>,
+        RGB,
+        llama::mapping::AoS
+    >::create();
+
+    auto m1 = mephisto::container::llama_factory<
+        mephisto::container::factory::dash_NArray<3>,
+        RGB,
+        llama::mapping::SoA
+    >::create();
+
+    using block_pattern = dash::BlockPattern<2>;
+    using block_matrix_factory =
+        mephisto::container::factory::dash_Matrix<
+            block_pattern::ndim(),
+            typename block_pattern::index_type,
+            block_pattern>;
+
+    auto m2 = mephisto::container::llama_factory<
+        block_matrix_factory,
+        RGB,
+        llama::mapping::SoA
+    >::create();
+
     dash::finalize();
 
     return 0;
