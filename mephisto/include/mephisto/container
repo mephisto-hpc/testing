@@ -15,6 +15,8 @@ struct std_vector
         typename value_type
     >
     using container_type = std::vector<value_type>;
+
+    constexpr static std::size_t dimensionality = 1;
 };
 
 template<
@@ -26,6 +28,8 @@ struct std_array
         typename value_type
     >
     using container_type = std::array<value_type, N>;
+
+    constexpr static std::size_t dimensionality = 1;
 };
 
 #ifdef DASH__LIBDASH_H_
@@ -36,6 +40,8 @@ struct dash_Array
         typename value_type
     >
     using container_type = dash::Array<value_type>;
+
+    constexpr static std::size_t dimensionality = 1;
 };
 
 template<
@@ -56,6 +62,8 @@ struct dash_Matrix
         PatternT,
         LocalMemSpaceT
     >;
+
+    constexpr static std::size_t dimensionality = NumDimensions;
 };
 
 template <
@@ -75,34 +83,14 @@ using dash_NArray = dash_Matrix<
 
 } /* factory */
 
-template<
-    typename T
->
-struct dimensionality
-{
-    static const std::size_t value = 1;
-};
-
-#ifdef DASH__LIBDASH_H_
-
-template<
-    dash::dim_t NumDimensions
->
-struct dimensionality<
-    factory::dash_Matrix<NumDimensions>
->
-{
-    static const std::size_t value = static_cast<std::size_t>(NumDimensions);
-};
-
-#endif
-
 /**
  * The container factory can be used to create containers with a LLAMA value type.
  *
  * @tparam ContainerFactoryT The container factory. Should have one sub-type
  *                           named `container_type` with one template argument
  *                           for the value type.
+ *                           One static member of type `std::size_t` names
+ *                           `dimensionality` for the number of dimensions.
  * @tparam DatumDomainT      The LLAMA datum domain type.
  * @tparam MappingT          The LLAMA mapping to use.
  */
@@ -131,9 +119,7 @@ struct llama_factory
                 >;
         using mapping_type = MappingT<
             ::llama::UserDomain<
-                mephisto::container::dimensionality<
-                    container_factory_type
-                >::value
+                container_factory_type::dimensionality
             >,
             DatumDomainT
         >;
