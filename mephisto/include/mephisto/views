@@ -1,0 +1,75 @@
+#ifndef MEPHISTO_VIEWS
+#define MEPHISTO_VIEWS
+
+#include <llama/llama.hpp>
+
+#include <mephisto/container>
+
+namespace mephisto {
+
+namespace view {
+
+namespace details {
+
+template<
+    typename T_Parameter
+>
+struct PassThroughAllocator
+{
+    using PrimType = unsigned char;
+    using BlobType = PrimType*;
+    using Parameter = T_Parameter*;
+
+    LLAMA_NO_HOST_ACC_WARNING
+    static inline
+    auto
+    allocate(
+        std::size_t count,
+        Parameter const pointer
+    )
+    -> BlobType
+    {
+        return reinterpret_cast<BlobType>(pointer);
+    }
+};
+
+} /* details */
+
+struct llama_view
+{
+    template<
+        typename ContainerT
+    >
+    static
+    auto
+    create_host_view(ContainerT& container)
+    -> llama::View<
+        typename ContainerT::value_type::mapping_type,
+        unsigned char*
+    >
+    {
+        using container_value_type   = typename ContainerT::value_type;
+        using container_factory_type = typename container_value_type::container_factory_type;
+        using container_type         = typename container_value_type::container_type;
+        using mapping_type           = typename container_value_type::mapping_type;
+        using user_domain_type       = typename mapping_type::UserDomain;
+        using datum_domain_type      = typename mapping_type::DatumDomain;
+
+        using factory = llama::Factory<
+            mapping_type,
+            details::PassThroughAllocator<
+                container_value_type
+            >
+        >;
+        auto user_domain = container_factory_type::extent(container);
+        auto mapping = mapping_type(user_domain);
+
+        return factory::allocView(mapping, container_factory_type::data(container));
+    }
+};
+
+} /* view */
+
+} /* mephisto */
+
+#endif /* MEPHISTO_CONTAINER */

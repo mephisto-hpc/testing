@@ -51,3 +51,7 @@ ALPAKA_ADD_EXECUTABLE(
 TARGET_LINK_LIBRARIES(
     llama_container
     PUBLIC "${DASH_LIBRARIES}")
+
+ALPAKA_ADD_EXECUTABLE(
+    llama_container_view
+    "llama_container_view.cpp")

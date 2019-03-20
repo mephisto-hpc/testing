@@ -17,6 +17,28 @@ struct std_vector
     using container_type = std::vector<value_type>;
 
     constexpr static std::size_t dimensionality = 1;
+
+    template<
+        typename container_type
+    >
+    static
+    auto
+    extent(const container_type& container)
+    -> llama::UserDomain< 1 >
+    {
+        return llama::UserDomain< 1 >( { container.size() } );
+    }
+
+    template<
+        typename container_type
+    >
+    static
+    auto
+    data(container_type& container)
+    -> typename container_type::value_type*
+    {
+        return container.data();
+    }
 };
 
 template<
@@ -30,6 +52,28 @@ struct std_array
     using container_type = std::array<value_type, N>;
 
     constexpr static std::size_t dimensionality = 1;
+
+    template<
+        typename container_type
+    >
+    static
+    auto
+    extent(const container_type& container)
+    -> llama::UserDomain< 1 >
+    {
+        return llama::UserDomain< 1 >( { N } );
+    }
+
+    template<
+        typename container_type
+    >
+    static
+    auto
+    data(container_type& container)
+    -> typename container_type::value_type*
+    {
+        return container.data();
+    }
 };
 
 #ifdef DASH__LIBDASH_H_
