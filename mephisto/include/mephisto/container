@@ -86,6 +86,28 @@ struct dash_Array
     using container_type = dash::Array<value_type>;
 
     constexpr static std::size_t dimensionality = 1;
+
+    template<
+        typename container_type
+    >
+    static
+    auto
+    extent(const container_type& container)
+    -> llama::UserDomain< 1 >
+    {
+        return llama::UserDomain< 1 >( { container.lsize() } );
+    }
+
+    template<
+        typename container_type
+    >
+    static
+    auto
+    data(container_type& container)
+    -> typename container_type::value_type*
+    {
+        return container.lbegin();
+    }
 };
 
 template<
@@ -108,6 +130,28 @@ struct dash_Matrix
     >;
 
     constexpr static std::size_t dimensionality = NumDimensions;
+
+    template<
+        typename container_type
+    >
+    static
+    auto
+    extent(const container_type& container)
+    -> llama::UserDomain< NumDimensions >
+    {
+        return llama::UserDomain< NumDimensions >( { container.local_extents() } );
+    }
+
+    template<
+        typename container_type
+    >
+    static
+    auto
+    data(container_type& container)
+    -> typename container_type::value_type*
+    {
+        return container.lbegin();
+    }
 };
 
 template <

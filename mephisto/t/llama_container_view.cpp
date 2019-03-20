@@ -1,6 +1,8 @@
 #include <iostream>
 #include <vector>
 
+#include <libdash.h>
+
 #include <mephisto/container>
 #include <mephisto/views>
 
@@ -36,6 +38,24 @@ main(int ac, char* av[])
     >::create();
 
     auto a0_view = mephisto::view::llama_view::create_host_view(a0);
+
+    dash::init(&ac, &av);
+
+    auto a1 = mephisto::container::llama_factory<
+        mephisto::container::factory::dash_Array,
+        RGB,
+        llama::mapping::SoA
+    >::create(dash::size() * 100);
+
+    auto a1_view = mephisto::view::llama_view::create_host_view(a1);
+
+    auto m0 = mephisto::container::llama_factory<
+        mephisto::container::factory::dash_Matrix<2>,
+        RGB,
+        llama::mapping::AoS
+    >::create(dash::size() * 10, dash::size() * 10);
+
+    dash::finalize();
 
     return 0;
 }
