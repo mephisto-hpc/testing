@@ -1,3 +1,15 @@
+/* To the extent possible under law, Alexander Matthes has waived all
+ * copyright and related or neighboring rights to this example of LLAMA using
+ * the CC0 license, see https://creativecommons.org/publicdomain/zero/1.0 .
+ *
+ * This example is meant to be "stolen" from to learn how to use LLAMA, which
+ * itself is not under the public domain but LGPL3+.
+ */
+
+/** \file nbody.cpp
+ *  \brief Realistic nbody example for using LLAMA and ALPAKA together.
+ */
+
 #include <iostream>
 #include <utility>
 
@@ -6,11 +18,15 @@
 #ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
 #define NBODY_CUDA 1
 #else
+/// defines whether cuda shall be used
 #define NBODY_CUDA 0
 #endif
 
+/// total number of particles
 #define NBODY_PROBLEM_SIZE 16*1024
+/// number of elements per block
 #define NBODY_BLOCK_SIZE 256
+/// number of steps to calculate
 #define NBODY_STEPS 5
 
 
@@ -24,8 +40,6 @@
 #include <alpaka/alpaka.hpp>
 #ifdef __CUDACC__
 	#define LLAMA_FN_HOST_ACC_INLINE ALPAKA_FN_ACC __forceinline__
-#else
-	#define LLAMA_FN_HOST_ACC_INLINE ALPAKA_FN_ACC inline
 #endif
 #include <llama/llama.hpp>
 #include <random>
@@ -37,6 +51,9 @@
 #include "HRChrono.hpp"
 #include "Dummy.hpp"
 #include "Human.hpp"
+
+namespace nbody
+{
 
 using Element = float;
 constexpr Element EPS2 = 0.01;
@@ -78,6 +95,9 @@ using Particle = llama::DS<
     llama::DE< dd::Mass, Element >
 >;
 
+/** Helper function for particle particle interaction. Gets two virtual datums
+ *  like they are real particle objects
+ */
 template<
     typename T_VirtualDatum1,
     typename T_VirtualDatum2
@@ -85,34 +105,31 @@ template<
 LLAMA_FN_HOST_ACC_INLINE
 auto
 pPInteraction(
-    T_VirtualDatum1&& localP,
-    T_VirtualDatum2&& remoteP,
+    T_VirtualDatum1 && p1,
+    T_VirtualDatum2 && p2,
     Element const & ts
 )
 -> void
 {
-    Element const d[3] = {
-        localP( dd::Pos(), dd::X() ) -
-        remoteP( dd::Pos(), dd::X() ),
-        localP( dd::Pos(), dd::Y() ) -
-        remoteP( dd::Pos(), dd::Y() ),
-        localP( dd::Pos(), dd::Z() ) -
-        remoteP( dd::Pos(), dd::Z() )
-    };
-    Element distSqr = d[0] * d[0] + d[1] * d[1] + d[2] * d[2] + EPS2;
+    // Creating tempory virtual datum object for distance on stack:
+    auto distance = p1( dd::Pos( ) ) + p2( dd::Pos( ) );
+    distance *= distance; //square for each element
+    Element distSqr = EPS2 +
+        distance( dd::X( ) ) +
+        distance( dd::Y( ) ) +
+        distance( dd::Z( ) );
     Element distSixth = distSqr * distSqr * distSqr;
-    Element invDistCube = 1.0f / sqrtf(distSixth);
-    Element s = remoteP( dd::Mass() ) * invDistCube;
-    Element const v_d[3] = {
-        d[0] * s * ts,
-        d[1] * s * ts,
-        d[2] * s * ts
-    };
-    localP( dd::Vel(), dd::X() ) += v_d[0];
-    localP( dd::Vel(), dd::Y() ) += v_d[1];
-    localP( dd::Vel(), dd::Z() ) += v_d[2];
+    Element invDistCube = 1.0f / sqrtf( distSixth );
+    Element s = p2( dd::Mass( ) ) * invDistCube;
+    distance *= s * ts;
+    p1( dd::Vel( ) ) += distance;
 }
 
+/** Implements an allocator for LLAMA using the ALPAKA shared memory or just
+ *  local stack memory depending on the number of threads per block. If only one
+ *  thread exists per block, the expensive share memory allocation can be
+ *  avoided
+ */
 template<
     typename T_Acc,
     std::size_t T_size,
@@ -177,6 +194,9 @@ struct BlockSharedMemoryAllocator<
     }
 };
 
+/** Alpaka kernel for updating the speed of every particle based on the distance
+ *  and mass to each other particle. Has complexity O(N²).
+ */
 template<
     std::size_t problemSize,
     std::size_t elems,
@@ -191,7 +211,7 @@ struct UpdateKernel
     >
     LLAMA_FN_HOST_ACC_INLINE
     void operator()(
-        T_Acc const &acc,
+        T_Acc const & acc,
         T_ViewLocal localParticles,
         T_ViewRemote remoteParticles,
         Element ts
@@ -201,16 +221,20 @@ struct UpdateKernel
         constexpr std::size_t threads = blockSize / elems;
         using SharedAllocator = BlockSharedMemoryAllocator<
             T_Acc,
-            llama::SizeOf< typename decltype(remoteParticles)::Mapping::DatumDomain >::value
+            llama::SizeOf< typename decltype( remoteParticles )::Mapping::DatumDomain >::value
             * blockSize,
             __COUNTER__,
             threads
         >;
 
+        auto threadBlockIndex = alpaka::idx::getIdx<
+            alpaka::Block,
+            alpaka::Threads
+        >( acc )[ 0u ];
 
         using SharedMapping = llama::mapping::SoA<
-            typename decltype(remoteParticles)::Mapping::UserDomain,
-            typename decltype(remoteParticles)::Mapping::DatumDomain
+            typename decltype( remoteParticles )::Mapping::UserDomain,
+            typename decltype( remoteParticles )::Mapping::DatumDomain
         >;
         SharedMapping const sharedMapping( { blockSize } );
 
@@ -224,7 +248,7 @@ struct UpdateKernel
             SharedMapping
         >( sharedMapping, acc );
 
-        auto threadIndex  = alpaka::idx::getIdx<
+        auto threadIndex = alpaka::idx::getIdx<
             alpaka::Grid,
             alpaka::Threads
         >( acc )[ 0u ];
@@ -236,7 +260,7 @@ struct UpdateKernel
             problemSize
         );
         LLAMA_INDEPENDENT_DATA
-        for ( std::size_t b = 0; b < problemSize / blockSize; ++b )
+        for ( std::size_t b = 0; b < ( problemSize + blockSize - 1u ) / blockSize; ++b )
         {
             auto const start2 = b * blockSize;
             auto const   end2 = alpaka::math::min(
@@ -247,14 +271,14 @@ struct UpdateKernel
 
             LLAMA_INDEPENDENT_DATA
             for (
-                auto pos2 = decltype(end2)(0);
+                auto pos2 = decltype( end2 )( 0 );
                 pos2 + threadIndex < end2;
                 pos2 += threads
             )
-                temp(pos2 + threadIndex) = remoteParticles( start2 + pos2 + threadIndex );
+                temp( pos2 + threadBlockIndex ) = remoteParticles( start2 + pos2 + threadBlockIndex );
 
             LLAMA_INDEPENDENT_DATA
-            for ( auto pos2 = decltype(end2)(0); pos2 < end2; ++pos2 )
+            for ( auto pos2 = decltype( end2 )( 0 ); pos2 < end2; ++pos2 )
                 LLAMA_INDEPENDENT_DATA
                 for ( auto pos = start; pos < end; ++pos )
                     pPInteraction(
@@ -266,7 +290,7 @@ struct UpdateKernel
     }
 };
 
-
+/// Alpaka kernel for moving each particle with its speed. Has complexity O(N).
 template<
     std::size_t problemSize,
     std::size_t elems
@@ -279,12 +303,12 @@ struct MoveKernel
     >
     LLAMA_FN_HOST_ACC_INLINE
     void operator()(
-        T_Acc const &acc,
+        T_Acc const & acc,
         T_View particles,
         Element ts
     ) const
     {
-        auto threadIndex  = alpaka::idx::getIdx<
+        auto threadIndex = alpaka::idx::getIdx<
             alpaka::Grid,
             alpaka::Threads
         >( acc )[ 0u ];
@@ -292,20 +316,13 @@ struct MoveKernel
         auto const start = threadIndex * elems;
         auto const   end = alpaka::math::min(
             acc,
-            (threadIndex + 1) * elems,
+            ( threadIndex + 1 ) * elems,
             problemSize
         );
 
         LLAMA_INDEPENDENT_DATA
         for ( auto pos = start; pos < end; ++pos )
-        {
-            particles( pos )( dd::Pos(), dd::X() ) +=
-                particles( pos )( dd::Vel(), dd::X() ) * ts;
-            particles( pos )( dd::Pos(), dd::Y() ) +=
-                particles( pos )( dd::Vel(), dd::Y() ) * ts;
-            particles( pos )( dd::Pos(), dd::Z() ) +=
-                particles( pos )( dd::Vel(), dd::Z() ) * ts;
-        };
+            particles( pos )( dd::Pos( ) ) += particles( pos )( dd::Vel( ) ) * ts;
     }
 };
 
@@ -331,29 +348,25 @@ struct PassThroughAllocator
     }
 };
 
-
-int main(int argc, char *argv[])
+int main( int argc, char * * argv )
 {
     // ALPAKA
     using Dim = alpaka::dim::DimInt< 1 >;
     using Size = std::size_t;
-    using Extents = Size;
 
     using DevHost = alpaka::dev::DevCpu;
-    using PltfHost = alpaka::pltf::Pltf<DevHost>;
+    using PltfHost = alpaka::pltf::Pltf< DevHost >;
 
 #if NBODY_CUDA == 1
-    using Acc = alpaka::acc::AccGpuCudaRt<Dim, Size>;
+    using Acc = alpaka::acc::AccGpuCudaRt< Dim, Size >;
 #else
-    //~ using Acc = alpaka::acc::AccCpuSerial<Dim, Size>;
-    using Acc = alpaka::acc::AccCpuOmp2Blocks<Dim, Size>;
-    //~ using Acc = alpaka::acc::AccCpuOmp2Threads<Dim, Size>;
-    //~ using Acc = alpaka::acc::AccCpuOmp4<Dim, Size>;
+    //~ using Acc = alpaka::acc::AccCpuSerial< Dim, Size >;
+    using Acc = alpaka::acc::AccCpuOmp2Blocks< Dim, Size >;
+    //~ using Acc = alpaka::acc::AccCpuOmp2Threads< Dim, Size >;
+    //~ using Acc = alpaka::acc::AccCpuOmp4< Dim, Size >;
 #endif // NBODY_CUDA
-
-    using DevAcc = alpaka::dev::Dev<Acc>;
-    using PltfAcc = alpaka::pltf::Pltf<DevAcc>;
-    using WorkDiv = alpaka::workdiv::WorkDivMembers<Dim, Size>;
+    using DevAcc = alpaka::dev::Dev< Acc >;
+    using PltfAcc = alpaka::pltf::Pltf< DevAcc >;
 #if NBODY_CUDA == 1
     using Queue = alpaka::queue::QueueCudaRtSync;
 #else
@@ -365,8 +378,8 @@ int main(int argc, char *argv[])
 
     dash::init(&argc, &argv);
 
-    dart_unit_t myid = dash::myid();
-    dart_unit_t size = dash::size();
+    dart_unit_t myid = dash::myid( );
+    dart_unit_t size = dash::size( );
 
     // NBODY
     constexpr std::size_t problemSize = NBODY_PROBLEM_SIZE;
@@ -425,14 +438,14 @@ int main(int argc, char *argv[])
     >;
 
     if (myid == 0) {
-        std::cout << (size * problemSize) / 1000 << " thousand particles (";
-        std::cout << human_readable(size * (problemSize * llama::SizeOf<Particle>::value)) << ")\n";
+        std::cout << ( size * problemSize ) / 1000 << " thousand particles (";
+        std::cout << human_readable( size * problemSize * llama::SizeOf< Particle >::value ) << ")\n";
     }
 
     HRChrono chrono;
 
-    particles.allocate(size * problemSize);
-    auto   hostView = LocalFactory::allocView( mapping, particles.lbegin() );
+    particles.allocate( size * problemSize );
+    auto   hostView = LocalFactory::allocView( mapping, particles.lbegin( ) );
     auto    devView =    DevFactory::allocView( mapping,  devAcc );
     auto mirrowView = MirrorFactory::allocView( mapping, devView );
 
@@ -441,65 +454,59 @@ int main(int argc, char *argv[])
     auto    remoteDevView =    DevFactory::allocView( mapping,  devAcc );
     auto remoteMirrowView = MirrorFactory::allocView( mapping, devView );
 
-    chrono.printAndReset("Alloc:");
+    chrono.printAndReset( "Alloc" );
 
-    std::default_random_engine generator;
+    /// Random initialization of the particles
+    std::mt19937_64 generator;
     std::normal_distribution< Element > distribution(
         Element( 0 ), // mean
         Element( 1 )  // stddev
     );
-    auto seed = distribution(generator);
     LLAMA_INDEPENDENT_DATA
-    for (std::size_t i = 0; i < problemSize; ++i)
+    for ( std::size_t i = 0; i < problemSize; ++i )
     {
-        //~ auto temp = llama::tempAlloc< 1, Particle >();
-        //~ temp(dd::Pos(), dd::X()) = distribution(generator);
-        //~ temp(dd::Pos(), dd::Y()) = distribution(generator);
-        //~ temp(dd::Pos(), dd::Z()) = distribution(generator);
-        //~ temp(dd::Vel(), dd::X()) = distribution(generator)/Element(10);
-        //~ temp(dd::Vel(), dd::Y()) = distribution(generator)/Element(10);
-        //~ temp(dd::Vel(), dd::Z()) = distribution(generator)/Element(10);
-        hostView(i) = seed;
-        //~ hostView(dd::Pos(), dd::X()) = seed;
-        //~ hostView(dd::Pos(), dd::Y()) = seed;
-        //~ hostView(dd::Pos(), dd::Z()) = seed;
-        //~ hostView(dd::Vel(), dd::X()) = seed;
-        //~ hostView(dd::Vel(), dd::Y()) = seed;
-        //~ hostView(dd::Vel(), dd::Z()) = seed;
+        auto temp = llama::stackVirtualDatumAlloc< Particle >( );
+        temp( dd::Pos( ), dd::X( ) ) = distribution( generator );
+        temp( dd::Pos( ), dd::Y( ) ) = distribution( generator );
+        temp( dd::Pos( ), dd::Z( ) ) = distribution( generator );
+        temp( dd::Vel( ), dd::X( ) ) = distribution( generator ) / Element( 10 );
+        temp( dd::Vel( ), dd::Y( ) ) = distribution( generator ) / Element( 10 );
+        temp( dd::Vel( ), dd::Z( ) ) = distribution( generator ) / Element( 10 );
+        temp( dd::Mass( ) ) = distribution( generator ) / Element( 100 );
+        hostView( i ) = temp;
     }
 
-    chrono.printAndReset("Init:");
+    chrono.printAndReset( "Init" );
 
-    alpaka::mem::view::ViewPlainPtr<DevHost, unsigned char, Dim, Size> hostPlain(
-        reinterpret_cast<unsigned char*>(particles.lbegin()), devHost, problemSize * llama::SizeOf<Particle>::value);
-    alpaka::mem::view::copy(queue,
-        devView.blob[0].buffer,
+    alpaka::mem::view::ViewPlainPtr< DevHost, unsigned char, Dim, Size > hostPlain(
+        reinterpret_cast< unsigned char* >( particles.lbegin( ) ), devHost, problemSize * llama::SizeOf< Particle >::value );
+    // was: alpakaMemCopy( devView, hostPlain, userDomainSize, queue );
+    alpaka::mem::view::copy( queue,
+        devView.blob[ 0 ].buffer,
         hostPlain,
-        problemSize * llama::SizeOf<Particle>::value);
+        problemSize * llama::SizeOf< Particle >::value );
 
-    chrono.printAndReset("Copy H->D");
+    chrono.printAndReset( "Copy H->D" );
 
-    const alpaka::vec::Vec< Dim, Size > elems (
+    const alpaka::vec::Vec< Dim, Size > elems(
         static_cast< Size >( elemCount )
     );
-    const alpaka::vec::Vec< Dim, Size > threads (
+    const alpaka::vec::Vec< Dim, Size > threads(
         static_cast< Size >( threadCount )
     );
     constexpr auto innerCount = elemCount * threadCount;
-    const alpaka::vec::Vec< Dim, Size > blocks (
-        static_cast< Size >( ( problemSize + innerCount - 1 ) / innerCount )
+    const alpaka::vec::Vec< Dim, Size > blocks(
+        static_cast< Size >( ( problemSize + innerCount - 1u ) / innerCount )
     );
 
     auto const workdiv = alpaka::workdiv::WorkDivMembers<
         Dim,
         Size
-    > {
+    >{
         blocks,
         threads,
         elems
     };
-
-    // copy hostView to devView
 
     UpdateKernel<
         problemSize,
@@ -510,10 +517,10 @@ int main(int argc, char *argv[])
         problemSize,
         elemCount
     > moveKernel;
-    for ( std::size_t s = 0; s < steps; ++s)
+    for ( std::size_t s = 0; s < steps; ++s )
     {
         /* pair-wise with local particles */
-        alpaka::kernel::exec< Acc > (
+        alpaka::kernel::exec< Acc >(
             queue,
             workdiv,
             updateKernel,
@@ -522,24 +529,24 @@ int main(int argc, char *argv[])
             ts
         );
 
-        chrono.printAndReset("Update kernel:       ");
+        chrono.printAndReset( "Update kernel:       " );
 
         /* pair-wise with remote particles */
-        for (dart_unit_t unit_it = 1; unit_it < size; ++unit_it)
+        for ( dart_unit_t unit_it = 1; unit_it < size; ++unit_it )
         {
-            dart_unit_t remote = (myid + unit_it) % size;
+            dart_unit_t remote = ( myid + unit_it ) % size;
 
             // get remote local block into remoteHostView
-            auto remote_begin = particles.begin() + (remote * problemSize);
+            auto remote_begin = particles.begin( ) + ( remote * problemSize );
             auto remote_end   = remote_begin + problemSize;
-            auto target_begin = reinterpret_cast<particle*>(alpaka::mem::view::getPtrNative(remoteHostView.blob[0].buffer));
-            dash::copy(remote_begin, remote_end, target_begin);
+            auto target_begin = reinterpret_cast< particle* >( alpaka::mem::view::getPtrNative( remoteHostView.blob[ 0 ].buffer ) );
+            dash::copy( remote_begin, remote_end, target_begin );
 
-            chrono.printAndReset("Copy from remote:    ");
+            chrono.printAndReset( "Copy from remote:    " );
 
             alpakaMemCopy( remoteDevView, remoteHostView, userDomainSize, queue );
 
-            alpaka::kernel::exec< Acc > (
+            alpaka::kernel::exec< Acc >(
                 queue,
                 workdiv,
                 updateKernel,
@@ -551,27 +558,35 @@ int main(int argc, char *argv[])
             chrono.printAndReset("Update remote kernel:");
         }
 
-        alpaka::kernel::exec<Acc>(
+        alpaka::kernel::exec< Acc >(
             queue,
             workdiv,
             moveKernel,
             mirrowView,
             ts
         );
-        chrono.printAndReset("Move kernel:         ");
-        dummy( static_cast<void*>( mirrowView.blob[0] ) );
+        chrono.printAndReset( "Move kernel:         " );
+        dummy( static_cast< void * >( mirrowView.blob[ 0 ] ) );
 
-        alpaka::mem::view::copy(queue,
+        // was: alpakaMemCopy( hostPlain, devView, userDomainSize, queue );
+        alpaka::mem::view::copy( queue,
             hostPlain,
-            devView.blob[0].buffer,
-            problemSize * llama::SizeOf<Particle>::value);
+            devView.blob[ 0 ].buffer,
+            problemSize * llama::SizeOf< Particle >::value );
 
-        particles.barrier();
+        particles.barrier( );
     }
 
-    chrono.printAndReset("Copy D->H");
+    chrono.printAndReset( "Copy D->H" );
 
-    dash::finalize();
+    dash::finalize( );
 
     return 0;
+}
+
+} // namespace nbody
+
+int main( int argc, char ** argv )
+{
+    return nbody::main( argc, argv );
 }
