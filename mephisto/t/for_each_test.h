@@ -2,6 +2,7 @@
 #define MEPHISTO_FOR_EACH_TEST_H
 
 #include "gtest/gtest.h"
+#include <alpaka/alpaka.hpp>
 #include <libdash.h>
 #include <mephisto/array>
 #include <mephisto/algorithm/for_each>
@@ -23,17 +24,17 @@ public:
   using PatternT   = dash::BlockPattern<Dim>;
   using MetaT      = typename mephisto::Metadata<PatternT>;
   using ViewT      = typename dash::Array<Data>::local_type;
-  using AlpakaDim  = alpaka::dim::DimInt<1>;
+  using AlpakaDim  = alpaka::dim::DimInt<Dim>;
   using ArrayT     = dash::Array<Data, dash::default_index_t, PatternT>;
   using SizeT      = ArrayT::size_type;
 
 // Setup accelerator and host
 #ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
   using Acc       = alpaka::acc::AccGpuCudaRt<AlpakaDim, SizeT>;
-  using StreamAcc = alpaka::stream::StreamCudaRtSync;
+  using StreamAcc = alpaka::queue::QueueCudaRtSync;
 #else
   using Acc       = alpaka::acc::AccCpuSerial<AlpakaDim, SizeT>;
-  using StreamAcc = alpaka::stream::StreamCpuSync;
+  using StreamAcc = alpaka::queue::QueueCpuSync;
 #endif
   using Host = alpaka::acc::AccCpuSerial<AlpakaDim, SizeT>;
 
@@ -59,11 +60,9 @@ protected:
 
 // This needs to be defined outside of TEST_F for nvcc.
 struct ForEachClb {
-  void operator()(Data &data, const mephisto::array<size_t, 3> coords)
+  Data operator()(const Data &data) const
   {
-    data.x = coords[0];
-    data.y = coords[1];
-    data.z = coords[2];
+    return Data{data.x + 1, data.y + 2, data.z + 3};
   }
 };
 

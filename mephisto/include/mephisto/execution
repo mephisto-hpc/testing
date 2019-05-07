@@ -4,6 +4,7 @@
 
 #include <alpaka/alpaka.hpp>
 #include <libdash.h>
+#include <dash/Execution.h>
 #include <mephisto/buffer>
 #include <mephisto/algorithm/copy>
 #include <mephisto/algorithm/for_each>
@@ -15,27 +16,26 @@ namespace execution {
 /**
  * An executor that uses alpaka to do the work.
  */
-template<class Kernel, class AlpakaContext, bool CopyBack = false>
+template<class Kernel, class AlpakaContext>
 struct AlpakaExecutor {
     AlpakaContext ctx;
 
-    // we cheat a bit and use begin and end as the shape
-    template <typename IterT>
-    using shape_type = std::pair<IterT, IterT>;
-    using Acc        = typename AlpakaContext::acc_t;
-    using SizeT      = size_t;
+    // Wrapper entity
+    using Entity = typename AlpakaContext::entity_t;
+    // Alpaka entity/accelerator
+    using Acc    = typename Entity::acc_t;
 
     AlpakaExecutor(AlpakaContext context)
       : ctx(context)
     {
     }
-
-    template <class Function, class IterT, class SharedState>
+#if 0
+    template <class Function, class Iter, class SharedState>
     void bulk_execute(
         Function executorFunc, shape_type<IterT> shape, SharedState state)
     {
-        using ElementT = typename IterT::value_type;
-        using PatternT = typename IterT::pattern_type;
+        using ElementT = typename Iter::value_type;
+        using PatternT = typename Iter::pattern_type;
 
         // ---------------------------------------------
         // Copy data to the accelerator
@@ -61,7 +61,7 @@ struct AlpakaExecutor {
             ElementT,
             AlpakaContext,
             PatternT,
-            dash::GlobIter<ElementT, PatternT>>(ctx, begin, end);
+            decltype(begin)>(ctx, begin, end);
 
 
         // copy the buffer to the device
@@ -76,23 +76,103 @@ struct AlpakaExecutor {
         // Execute the kernel
         // ---------------------------------------------
         //
-        auto const forEach(alpaka::exec::create<Acc>(
+        auto const forEach(alpaka::kernel::exec<Acc>(
             workDiv, kernel, deviceBuf, nelems, executorFunc));
 
-        alpaka::stream::enqueue(ctx.stream, forEach);
+        alpaka::queue::enqueue(ctx.stream, forEach);
 
-        if (CopyBack) {
-          // copy the buffer to the device
-          mephisto::get(ctx.stream, hostBuf);
+        // copy the buffer to the device
+        mephisto::get(ctx.stream, hostBuf);
+    }
+#endif
+
+    template <
+        class Function,
+        class Shape,
+        class ResultFactory,
+        class SharedFactory>
+    void bulk_twoway_execute(
+        Function f, Shape iter, ResultFactory result, SharedFactory sf) const
+    {
+      auto &pattern = iter.pattern();
+
+      using PatternT   = typename Shape::pattern_type;
+      using value_type = typename Shape::value_type;
+      using dim        = alpaka::dim::DimInt<pattern.ndim()>;
+
+      // Assume we have a LocalPattern that lets us iterate over local blocks
+      // for each accelerator
+      for (auto &entity : ctx.entities()) {
+        for (auto block : pattern.blocks_for_entity(entity)) {
+          using ViewSpec = decltype(block);
+
+          // do work on this block
+
+          // 1. create workdiv from block
+          alpaka::vec::Vec<dim, std::size_t> const extents{block.extents()};
+          auto                                     offsets = block.offsets();
+          alpaka::workdiv::WorkDivMembers<dim, std::size_t> const workDiv{
+              alpaka::workdiv::getValidWorkDiv<Acc>(entity, extents)};
+          // 2. create host buffer, TODO: simplify
+          auto hostBuf =
+              mephisto::HostDataBuffer<value_type, Entity, ViewSpec>{
+                  block, pattern.at(block)};
+
+          // 3. copy the buffer to the entity
+          // 4. work
+          // 5. copy data back
         }
+        }
+
+        // ---------------------------------------------
+        // Copy data to the accelerator
+        // ---------------------------------------------
+        auto begin = std::get<0>(shape);
+        auto end = std::get<1>(shape);
+        SizeT nelems = std::distance(begin, end);
+        assert(nelems >= 0);
+
+        alpaka::vec::Vec<alpaka::dim::DimInt<1u>, SizeT> const extent(nelems);
+
+        alpaka::workdiv::WorkDivMembers<alpaka::dim::DimInt<1u>, SizeT> const
+            workDiv(alpaka::workdiv::getValidWorkDiv<Acc>(
+                ctx.accDevice,
+                extent,
+                static_cast<SizeT>(1u),
+                false,
+                alpaka::workdiv::GridBlockExtentSubDivRestrictions::
+                    Unrestricted));
+
+        // create the host buffer
+        auto hostBuf = mephisto::HostDataBuffer<
+            ElementT,
+            AlpakaContext,
+            PatternT,
+            decltype(begin)>(ctx, begin, end);
+
+
+        // copy the buffer to the device
+        mephisto::put(ctx.stream, hostBuf);
+
+        // get the buffer on the device
+        auto deviceBuf = hostBuf.getDeviceDataBuffer();
+
+        Kernel kernel;
+
+        // ---------------------------------------------
+        // Execute the kernel
+        // ---------------------------------------------
+        //
+        auto const forEach(alpaka::kernel::exec<Acc>(
+            workDiv, kernel, deviceBuf, nelems, executorFunc));
+
+        alpaka::queue::enqueue(ctx.stream, forEach);
+
+        // copy the buffer to the device
+        mephisto::get(ctx.stream, hostBuf);
     }
 
-    template<class Policy>
-    AlpakaExecutor require(Policy &) {
-        return *this;
-    }
-
-    AlpakaContext &context()
+    AlpakaContext &context() const
     {
         return ctx;
     }
@@ -152,21 +232,16 @@ ParallelPolicy<Executor> make_parallel_policy(Executor ex)
 {
     return ParallelPolicy<Executor>(ex);
 }
-}
-}
+}  // namespace execution
+}  // namespace mephisto
 
 namespace dash {
 
 template <class Executor>
 struct is_execution_policy<mephisto::execution::ParallelPolicy<Executor>>
-    : std::true_type {
+    : public std::true_type {
 };
 
-template <class Executor>
-struct has_executor<mephisto::execution::ParallelPolicy<Executor>>
-    : std::true_type {
-};
-
-}
+}  // namespace dash
 
 #endif

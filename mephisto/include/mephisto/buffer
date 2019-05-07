@@ -10,126 +10,85 @@
 namespace mephisto {
 
 /**
- * The context of a buffer.
- *
- * This is mainly a pair of host and accelerator and can be used to specialize
- * copy operations etc.
- *
- * @tparam HostT The host type of the buffer
- * @tparam DeviceT The accelerator type this buffer is used for
- */
-template <
-  typename HostT,
-  typename DeviceT>
-struct Context {
-  using host_t = typename std::remove_cv<HostT>::type;
-  using device_t = typename std::remove_cv<DeviceT>::type;
-
-  HostT &hostDev;
-  DeviceT &accDev;
-
-  Context(HostT &hostDev, DeviceT &accDev) : hostDev(hostDev), accDev(accDev) {}
-};
-
-/**
- * Create context from host and device/accelerator
- *
- */
-template <
-  typename HostT,
-  typename DeviceT>
-Context<HostT, DeviceT> make_ctx(HostT &host, DeviceT &device) {
-  return Context<HostT, DeviceT>(host, device);
-};
-
-/**
  * Information about a local chunk of memory and its coordinates relative to
  * the global origin.
  */
-template <
-    typename PatternT>
+template <typename ViewSpec>
 struct Metadata {
-    static constexpr int NDim = PatternT::ndim();
+  static constexpr int NDim = ViewSpec::ndim();
 
-    using OffsetT = typename PatternT::index_type;
-    using ExtentT = typename PatternT::size_type;
-    using OffsetsT = mephisto::array<OffsetT, NDim>;
-    using ExtentsT = mephisto::array<ExtentT, NDim>;
+  ViewSpec _viewspec;
 
-    // Offset at first element
-    OffsetsT offsets;
-    ExtentsT localExtents;
-    ExtentsT globalExtents;
+  Metadata(ViewSpec viewspec)
+    : _viewspec(viewspec)
+  {
+  }
 
-    size_t chunkSize;
+  ALPAKA_FN_HOST_ACC
+  auto offsets() const
+  {
+    return _viewspec.offsets();
+  }
 
-    Metadata(OffsetsT offsets, ExtentsT globalExtents, ExtentsT localExtents) : offsets(offsets), localExtents(localExtents) {
-        // Calculate the chunk size once
-        chunkSize = 1;
-        for(auto i : localExtents) {
-            chunkSize *= i;
-        }
-    }
+  ALPAKA_FN_HOST_ACC
+  auto extents() const
+  {
+    return _viewspec.extents();
+  }
 
-    ALPAKA_FN_HOST_ACC
-      OffsetsT global_coords(ExtentT localOffset) const {
-      OffsetsT globalCoords;
-
-      if (NDim == 1) {
-        globalCoords[0] = offsets[0] + localOffset;
-      }
-      else if (NDim == 2) {
-        globalCoords[0] = offsets[0] + (localOffset / localExtents[0]);
-        globalCoords[1] = offsets[1] + (localOffset % localExtents[0]);
-      }
-      else if (NDim == 3) {
-        globalCoords[0] =
-            offsets[2] + (localOffset / (localExtents[0] * localExtents[1]));
-        globalCoords[1] = offsets[0] + ((localOffset % (localExtents[0] * localExtents[1])) / localExtents[0]);
-        globalCoords[2] = offsets[1] + (localOffset % localExtents[0]);
-      }
-      return globalCoords;
-    }
+  ALPAKA_FN_HOST_ACC
+  auto size() const
+  {
+    return _viewspec.size();
+  }
 };
-
 
 template <
-    typename ElementT,
-    typename DeviceT,
-    typename MetaT,
+    typename Element,
+    typename Device,
+    typename ViewSpec,
     typename Alignment =
-        typename alpaka::core::align::OptimalAlignment<sizeof(ElementT)>::type>
-struct DeviceDataBuffer {
+        typename alpaka::core::align::OptimalAlignment<sizeof(Element)>::type>
+class DeviceDataBuffer {
 
-    static constexpr size_t MetaOffset = sizeof(MetaT) + sizeof(MetaT) % Alignment::value;
-    ElementT *data;
+  using Meta = Metadata<ViewSpec>;
 
-    DeviceDataBuffer(ElementT *data) : data(data) {}
 
-    ALPAKA_FN_HOST_ACC
-    const MetaT &getMeta() const {
-        // get the memory MetaOffset bytes before data
-        return *reinterpret_cast<MetaT *>(reinterpret_cast<char *>(data) - MetaOffset);
-    }
+  static constexpr size_t MetaOffset =
+      sizeof(Meta) + sizeof(Meta) % Alignment::value;
+  Element *data;
 
-    /**
-     * Returns the one-past-end pointer
-     */
-    ALPAKA_FN_HOST_ACC
-    ElementT *begin() {
-        return data;
-    }
+  DeviceDataBuffer(Element *data)
+    : data(data)
+  {
+  }
 
-    /**
-     * Returns the one-past-end pointer
-     */
-    ALPAKA_FN_HOST_ACC
-    ElementT *end() const {
-        return begin() + getMeta().chunkSize;
-    }
+  ALPAKA_FN_HOST_ACC
+  const Meta &getMeta() const
+  {
+    // get the memory MetaOffset bytes before data
+    return *reinterpret_cast<Meta *>(
+        reinterpret_cast<char *>(data) - MetaOffset);
+  }
+
+  /**
+   * Returns the one-past-end pointer
+   */
+  ALPAKA_FN_HOST_ACC
+  Element *begin()
+  {
+    return data;
+  }
+
+  /**
+   * Returns the one-past-end pointer
+   */
+  ALPAKA_FN_HOST_ACC
+  Element *end() const
+  {
+    return begin() + getMeta().chunkSize;
+  }
 };
-
-
 
 /**
  * Data buffer is used to reduce the number of parameters to avoid hitting the 256 byte
@@ -139,106 +98,98 @@ struct DeviceDataBuffer {
  *
  */
 template <
-    typename ElementT,
-    typename ContextT,
-    typename PatternT,
-    typename IterT,
+    typename Element,
+    typename Device,
+    typename ViewSpec,
     typename Alignment =
-        typename alpaka::core::align::OptimalAlignment<sizeof(ElementT)>::type>
-struct HostDataBuffer {
-  using NonConstElementT = typename std::remove_const<ElementT>::type;
-  using HostT            = typename ContextT::host_t;
-  using DeviceT          = typename ContextT::device_t;
-
-  using MetaT            = Metadata<PatternT>;
-  using DeviceBufT =
-      DeviceDataBuffer<NonConstElementT, DeviceT, MetaT, Alignment>;
-  using DimT = alpaka::dim::DimInt<1>;
-  using HostBufT =
-      alpaka::mem::view::ViewPlainPtr<HostT, ElementT, DimT, std::size_t>;
+        typename alpaka::core::align::OptimalAlignment<sizeof(Element)>::type>
+class HostDataBuffer {
+  using NonConstElement   = typename std::remove_const<Element>::type;
+  using Host              = typename alpaka::dev::DevCpu;
+  using Meta              = Metadata<ViewSpec>;
+  using Dim               = alpaka::dim::DimInt<Meta::NDim>;
+  using DeviceBuf =
+      DeviceDataBuffer<NonConstElement, Device, Meta, Alignment>;
+  using HostBuf =
+      alpaka::mem::view::ViewPlainPtr<Host, Element, Dim, std::size_t>;
 
   static constexpr size_t MetaOffset =
-      sizeof(MetaT) + sizeof(MetaT) % Alignment::value;
+      sizeof(Meta) + sizeof(Meta) % Alignment::value;
 
-  ContextT &context;
-  IterT begin;
-  IterT end;
+  Element *   begin;
   std::size_t bufsize;
   std::size_t datasize;
-  MetaT meta;
-  HostBufT hostBuf;
-  alpaka::mem::buf::Buf<DeviceT, char, DimT, std::size_t> deviceBuf;
+  Meta        meta;
+  HostBuf     hostBuf;
 
-  HostDataBuffer(ContextT &context, IterT begin, IterT end)
-    : context(context)
-    , begin(begin)
-    , end(end)
-    , bufsize(
-          sizeof(MetaT) + std::distance(begin, end) * sizeof(ElementT) + Alignment::value)
-    , datasize(std::distance(begin, end))
-    , meta(MetaT(
-          begin.pattern().coords(begin.gpos()),
-          begin.pattern().extents(),
-          begin.pattern().local_extents()))
-    , hostBuf(begin.local(), context.hostDevice, datasize)
-    , deviceBuf(alpaka::mem::buf::alloc<char, size_t>(context.accDevice, bufsize))
-  { } /* TODO: find infos from view */
+public:
+  HostDataBuffer(
+      ViewSpec viewspec,
+      const Element *  begin)
+    : begin(begin)
+    , meta(viewspec)
+    , datasize(viewspec.size())
+    , bufsize(sizeof(Meta) + datasize * sizeof(Element) + Alignment::value)
+    , hostBuf(begin, host(), datasize)
+  { }
 
-    DeviceBufT getDeviceDataBuffer() {
-      auto accBuf = alpaka::mem::view::getPtrNative(deviceBuf);
-      // Add MetaOffset bytes offset to the accBuf address
-      auto deviceBufAddr = reinterpret_cast<NonConstElementT *>(reinterpret_cast<char *>(accBuf) + MetaOffset);
-      return DeviceBufT(deviceBufAddr);
-    }
+    /* DeviceBuf getDeviceDataBuffer() { */
+    /*   auto accBuf = alpaka::mem::view::getPtrNative(deviceBuf); */
+    /*   // Add MetaOffset bytes offset to the accBuf address */
+    /*   auto deviceBufAddr = reinterpret_cast<NonConstElement *>( */
+    /*       reinterpret_cast<char *>(accBuf) + MetaOffset); */
+    /*   return DeviceBuf(deviceBufAddr); */
+    /* } */
 
-    ElementT *getData()
-    {
-      return begin.local();
-    }
+  Element *getData() const
+  {
+    return begin;
+  }
 
-    alpaka::mem::view::ViewPlainPtr<
-        DeviceT,
-        MetaT,
-        alpaka::dim::Dim<std::size_t>,
-        alpaka::size::Size<std::size_t>>
-    getDeviceMetaView()
-    {
-      auto devicePtr = alpaka::mem::view::getPtrNative(deviceBuf);
-      return alpaka::mem::view::ViewPlainPtr<DeviceT, MetaT,
-                                             alpaka::dim::Dim<std::size_t>,
-                                             alpaka::size::Size<std::size_t>>(
-          reinterpret_cast<MetaT *>(devicePtr), context.accDevice, static_cast<std::size_t>(1));
-    }
+  auto host() const
+  {
+    return Host{alpaka::pltf::getDevByIdx<alpaka::pltf::PltfCpu>(0u)};
+  }
 
-    alpaka::mem::view::ViewPlainPtr<
-        HostT,
-        MetaT,
-        alpaka::dim::Dim<std::size_t>,
-        alpaka::size::Size<std::size_t>>
-    getHostMetaView()
-    {
-      return alpaka::mem::view::createStaticDevMemView(
-          &meta, context.hostDevice, static_cast<std::size_t>(1));
-    }
+  /* auto getDeviceMetaView() */
+  /* { */
+  /*   auto devicePtr = alpaka::mem::view::getPtrNative(deviceBuf); */
+  /*   return alpaka::mem::view::ViewPlainPtr<Device, Meta, */
+  /*                                          alpaka::dim::Dim<std::size_t>,
+   */
+  /*                                          alpaka::idx::Idx<std::size_t>>(
+   */
+  /*       reinterpret_cast<Meta *>(devicePtr), context.accDevice,
+   * static_cast<std::size_t>(1)); */
+  /* } */
 
-    alpaka::mem::view::
-        ViewPlainPtr<DeviceT, NonConstElementT, alpaka::dim::Dim<std::size_t>, alpaka::size::Size<std::size_t>>
-        getDeviceDataView()
-    {
-      return alpaka::mem::view::ViewPlainPtr<DeviceT, NonConstElementT,
-                                             alpaka::dim::Dim<std::size_t>,
-                                             alpaka::size::Size<std::size_t>>(
-          reinterpret_cast<NonConstElementT *>(
-              reinterpret_cast<char *>(
-                  alpaka::mem::view::getPtrNative(deviceBuf)) +
-              MetaOffset),
-          context.accDevice, static_cast<std::size_t>(datasize));
-    }
+  auto getHostMetaView()
+  {
+    return alpaka::mem::view::createStaticDevMemView(
+        &meta, host(), static_cast<std::size_t>(1));
+  }
 
-    HostBufT &getHostDataView()
-    {
-      return hostBuf;
-    }
+  /* auto getDeviceDataView() */
+  /* { */
+  /* //, deviceBuf( */
+  /*  //     alpaka::mem::buf::alloc<char, size_t>(context.accDevice,
+   * bufsize)) */
+  /*   return alpaka::mem::view::ViewPlainPtr<Device, NonConstElement, */
+  /*                                          alpaka::dim::Dim<std::size_t>,
+   */
+  /*                                          alpaka::idx::Idx<std::size_t>>(
+   */
+  /*       reinterpret_cast<NonConstElement *>( */
+  /*           reinterpret_cast<char *>( */
+  /*               alpaka::mem::view::getPtrNative(deviceBuf)) + */
+  /*           MetaOffset), */
+  /*       context.accDevice, static_cast<std::size_t>(datasize)); */
+  /* } */
+
+  HostBuf &getHostDataView()
+  {
+    return hostBuf;
+  }
 };
 
 }

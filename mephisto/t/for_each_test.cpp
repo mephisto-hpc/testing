@@ -16,42 +16,40 @@ TEST_F(ForEachTest, itWorks) {
   using ArrayT    = dash::Array<Data, dash::default_index_t, PatternT>;
   using SizeT     = ArrayT::size_type;
 
-
-  PatternT pattern {10, 10, 10};
-  ArrayT arr {pattern};
+  PatternT pattern{10, 10, 10};
+  ArrayT   arr{pattern};
   dash::fill(arr.begin(), arr.end(), {42, 42, 42});
-    DevAcc const devAcc(alpaka::pltf::getDevByIdx<PltfAcc>(0u));
-    DevHost const devHost(alpaka::pltf::getDevByIdx<PltfHost>(0u));
-    StreamAcc stream(devAcc);
+  DevAcc const  devAcc(alpaka::pltf::getDevByIdx<PltfAcc>(0u));
+  DevHost const devHost(alpaka::pltf::getDevByIdx<PltfHost>(0u));
+  StreamAcc     stream(devAcc);
 
-    // Setup of the executor:
-    //
-    // Context consists of the host, the accelerator and the stream
-    auto ctx = mephisto::execution::make_context<Acc>(devHost, devAcc, stream);
+  // Setup of the executor:
+  //
+  // Context consists of the host, the accelerator and the stream
+  auto ctx = mephisto::execution::make_context<Acc>(devHost, devAcc, stream);
 
-    // The executor is the one actually doing the computation
-    mephisto::execution::AlpakaTwoWayExecutor<Kernel, decltype(ctx)> executor(ctx);
+  // The executor is the one actually doing the computation
+  mephisto::execution::AlpakaTwoWayExecutor<Kernel, decltype(ctx)> executor(
+      ctx);
 
-    // The policy is used to relax guarantees.
-    auto policy = mephisto::execution::make_parallel_policy(executor);
+  // The policy is used to relax guarantees.
+  auto policy = mephisto::execution::make_parallel_policy(executor);
 
-    // set the coordinates using an Alpaka policy
-    ForEachClb clb;
-    dash::for_each_with_index(
-        policy,
-        arr.begin(),
-        arr.end(),
-        clb
-        );
+  // set the coordinates using an Alpaka policy
+  ForEachClb clb;
+  dash::transform(policy, arr.begin(), arr.end(), arr.begin(), clb);
 
-    // Check the written coordinates using the standard for_each_with_index
-    dash::for_each_with_index(arr.begin(), arr.end(), [&pattern](const Data &d, PatternT::index_type i) {
+  // Check the written coordinates using the standard for_each_with_index
+  dash::for_each_with_index(
+      arr.begin(),
+      arr.end(),
+      [&pattern](const Data &d, PatternT::index_type i) {
         auto const coords = pattern.coords(i);
         printf("mephisto: [%lu,%lu,%lu] -  dash: [%lu,%lu,%lu]\n", d.x, d.y, d.z, coords[0], coords[1], coords[2]);
         ASSERT_EQ(d.x, coords[0]);
         ASSERT_EQ(d.y, coords[1]);
         ASSERT_EQ(d.x, coords[2]);
-    });
+      });
 }
 
 

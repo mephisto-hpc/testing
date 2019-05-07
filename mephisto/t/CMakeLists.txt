@@ -39,4 +39,5 @@ IF(DASH-MPI_FOUND)
     TARGET_LINK_LIBRARIES(
         for_each_test
         PUBLIC "alpaka;${DASH_LIBRARIES};gtest_main")
+    SET_PROPERTY(TARGET for_each_test PROPERTY CUDA_STANDARD 14)
 ENDIF()
