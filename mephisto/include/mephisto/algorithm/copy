@@ -9,37 +9,33 @@
 namespace mephisto {
 
 /**
- * Copy the elements and metadata from the host buffer to the device buffer
+ * Copy the elements and metadata from the host buffer to an entity memory
+ *
+ * TODO: evaluate how well this could be implemented with STL-like code
  */
-template <typename StreamT, typename BufT>
-void put(StreamT &stream, BufT &hostBuf)
+template <typename Stream, typename Buffer, typename Entity>
+void put(Stream &stream, Buffer &buf, Entity &entity)
 {
-    alpaka::vec::Vec<alpaka::dim::DimInt<1u>, size_t> const extent =
-        hostBuf.datasize;
-    auto  deviceMeta = hostBuf.getDeviceMetaView();
-    auto  hostMeta   = hostBuf.getHostMetaView();
-    auto  deviceData = hostBuf.getDeviceDataView();
-    auto &hostData   = hostBuf.getHostDataView();
-    // Copy metadata to the beginning of the buffer on the device
-    alpaka::mem::view::copy(stream, deviceMeta, hostMeta, 1);
-    // Copy the actual elements
-    alpaka::mem::view::copy(stream, deviceData, hostData, extent);
+  alpaka::vec::Vec<alpaka::dim::DimInt<1u>, size_t> const extent =
+      buf.datasize();
+  auto meta    = buf.meta();
+  auto data    = buf.data();
+  auto bufsize = buf.bufsize();
+
+  auto entity_buf = buf.alloc_entity_buf(entity);
+
+  // Copy metadata to the beginning of the buffer on the device
+  alpaka::mem::view::copy(stream, entity_buf.meta(), meta, 1);
+  // Copy the actual elements
+  alpaka::mem::view::copy(stream, entity_buf.data(), data, buf.datasize());
 };
 
-
-/**
- * Copy the elements from the device buffer to the host buffer
- */
-template <typename StreamT, typename BufT>
-void get(StreamT &stream, BufT &hostBuf)
+template <typename Stream, typename EntityBuf, typename HostBuf>
+void get(Stream &stream, EntityBuf &entity_buf, HostBuf &host_buf)
 {
-    alpaka::vec::Vec<alpaka::dim::DimInt<1u>, size_t> const extent =
-        hostBuf.datasize;
-    auto  deviceData = hostBuf.getDeviceDataView();
-    auto &hostData   = hostBuf.getHostDataView();
-    // Copy the actual elements
-    alpaka::mem::view::copy(stream, hostData, deviceData, extent);
+  // TODO: implement
 };
-}
+
+}  // namespace mephisto
 
 #endif

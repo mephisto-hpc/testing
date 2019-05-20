@@ -1,0 +1,62 @@
+#ifndef MEPHISTO__ENTITY
+#define MEPHISTO__ENTITY
+
+#include <alpaka/alpaka.hpp>
+#include <cstddef>
+
+namespace mephisto {
+
+/**
+ * An entity represents a computing element that can execute code.
+ *
+ * It is the glue between Alpaka and DASH. Alpaka already supports devices and
+ * DASH supports entities. These entities here have some extras added to allow
+ * the mapping from DASH-entities to devices and vice versa.
+ */
+template <
+    std::size_t Dim,
+    typename Size,
+    template <typename, typename>
+    class AlpakaAcc>
+struct Entity {
+  using alpaka_dim_t = alpaka::dim::DimInt<Dim>;
+  using acc_t  = AlpakaAcc<alpaka_dim_t, Size>;
+  using pltf_t = alpaka::pltf::Pltf<acc_t>;
+
+  Entity(std::size_t i)
+    : _index(i)
+  {
+  }
+
+  std::size_t index() const
+  {
+    return _index;
+  }
+
+  static std::size_t total()
+  {
+    return alpaka::pltf::getDevCount<pltf_t>();
+  }
+
+  acc_t device() const
+  {
+    return alpaka::pltf::getDevByIdx<pltf_t>(_index);
+  }
+
+  static auto all()
+  {
+    std::vector<Entity> entities;
+    entities.reserve(total());
+    for (std::size_t i = 0; i < total(); i++) {
+      entities.emplace_back(i);
+    }
+    return entities;
+  }
+
+private:
+  std::size_t _index = 0u;
+};
+
+}  // namespace mephisto
+
+#endif

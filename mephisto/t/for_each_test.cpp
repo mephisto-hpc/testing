@@ -4,33 +4,36 @@
 #include <mephisto/algorithm/for_each>
 #include <mephisto/execution>
 #include <mephisto/array>
+#include <mephisto/entity>
+#include <patterns/local_pattern.h>
 #include <alpaka/alpaka.hpp>
 
 TEST_F(ForEachTest, itWorks) {
-  auto const Dim  = 3;
-  using Data      = Pos;
-  using PatternT  = dash::BlockPattern<Dim>;
-  using MetaT     = typename mephisto::Metadata<PatternT>;
-  using ViewT     = typename dash::Array<Data>::local_type;
-  using AlpakaDim = alpaka::dim::DimInt<1>;
-  using ArrayT    = dash::Array<Data, dash::default_index_t, PatternT>;
-  using SizeT     = ArrayT::size_type;
+  auto const Dim = 3;
+  using Data     = Pos;
+  using MetaT    = typename mephisto::Metadata<PatternT>;
+  using ViewT    = typename dash::Array<Data>::local_type;
+  using SizeT    = ArrayT::size_type;
+  using EntityT =
+      mephisto::Entity<Dim, std::size_t, alpaka::acc::AccCpuSerial>;
+  using Queue   = alpaka::queue::QueueCpuSync;
+  using Context = mephisto::execution::AlpakaExecutionContext<EntityT, Queue>;
+  using BasePattern = dash::BlockPattern<Dim>;
+  using PatternT    = patterns::BalancedLocalPattern<BasePattern, EntityT>;
+  using ArrayT      = dash::Array<Data, dash::default_index_t, PatternT>;
 
-  PatternT pattern{10, 10, 10};
+  BasePattern base{10, 10, 10};
+  PatternT pattern{base};
   ArrayT   arr{pattern};
   dash::fill(arr.begin(), arr.end(), {42, 42, 42});
-  DevAcc const  devAcc(alpaka::pltf::getDevByIdx<PltfAcc>(0u));
-  DevHost const devHost(alpaka::pltf::getDevByIdx<PltfHost>(0u));
-  StreamAcc     stream(devAcc);
 
   // Setup of the executor:
-  //
+
   // Context consists of the host, the accelerator and the stream
-  auto ctx = mephisto::execution::make_context<Acc>(devHost, devAcc, stream);
+  Context ctx;
 
   // The executor is the one actually doing the computation
-  mephisto::execution::AlpakaTwoWayExecutor<Kernel, decltype(ctx)> executor(
-      ctx);
+  mephisto::execution::AlpakaExecutor<Context> executor{ctx};
 
   // The policy is used to relax guarantees.
   auto policy = mephisto::execution::make_parallel_policy(executor);

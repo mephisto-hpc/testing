@@ -1,0 +1,37 @@
+#ifndef MEPHISTO__ENTITIES__CUDA_RT_ENTITY
+#define MEPHISTO__ENTITIES__CUDA_RT_ENTITY
+
+#include <alpaka/alpaka.hpp>
+
+
+#ifdef ALPAKA_ACC_GPU_CUDA_ENABLED
+
+namespace mephisto {
+// Forward decl
+template <typename Acc>
+struct Entity;
+
+namespace entities {
+
+template<std::size_t Dim, std::size_t Size>
+struct CudaRtEntity : public mephisto::Entity<alpaka::acc::AccGpuCudaRt<Dim, Size>> {
+  FN_HOST_ACC size_t index() const
+  {
+    int device;
+    cudaGetDevice(&device);
+    return device;
+  }
+
+  FN_HOST_ACC size_t total() const
+  {
+    int deviceCount;
+    cudaGetDeviceCount(&deviceCount);
+    return deviceCount;
+  }
+};
+
+}  // namespace entities
+}  // namespace mephisto
+
+#endif
+#endif

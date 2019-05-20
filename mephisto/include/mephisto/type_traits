@@ -10,7 +10,14 @@ template <typename T> struct is_host { static const bool value = false; };
 template <typename T> struct is_accelerator {
   static const bool value = false;
 };
-}
-}
+}  // namespace buf_traits
+
+namespace entity_traits {
+template <typename T>
+struct device {
+  using type = typename T::device_type;
+};
+}  // namespace entity_traits
+}  // namespace mephisto
 
 #endif

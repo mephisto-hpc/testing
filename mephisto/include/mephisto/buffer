@@ -3,6 +3,7 @@
 #include <alpaka/alpaka.hpp>
 
 #include <mephisto/array>
+#include <mephisto/type_traits>
 #include <type_traits>
 
 #include <iostream>
@@ -58,7 +59,7 @@ class DeviceDataBuffer {
       sizeof(Meta) + sizeof(Meta) % Alignment::value;
   Element *data;
 
-  DeviceDataBuffer(Element *data)
+  DeviceDataBuffer(Device dev, Element *base)
     : data(data)
   {
   }
@@ -108,6 +109,7 @@ class HostDataBuffer {
   using Host              = typename alpaka::dev::DevCpu;
   using Meta              = Metadata<ViewSpec>;
   using Dim               = alpaka::dim::DimInt<Meta::NDim>;
+  using Idx               = std::size_t;
   using DeviceBuf =
       DeviceDataBuffer<NonConstElement, Device, Meta, Alignment>;
   using HostBuf =
@@ -116,34 +118,58 @@ class HostDataBuffer {
   static constexpr size_t MetaOffset =
       sizeof(Meta) + sizeof(Meta) % Alignment::value;
 
-  Element *   begin;
-  std::size_t bufsize;
-  std::size_t datasize;
-  Meta        meta;
-  HostBuf     hostBuf;
+  Element *   _begin;
+  std::size_t _bufsize;
+  std::size_t _nelems;
+  Meta        _meta;
+  HostBuf     _hostbuf;
 
 public:
   HostDataBuffer(
       ViewSpec viewspec,
       const Element *  begin)
-    : begin(begin)
-    , meta(viewspec)
-    , datasize(viewspec.size())
-    , bufsize(sizeof(Meta) + datasize * sizeof(Element) + Alignment::value)
-    , hostBuf(begin, host(), datasize)
+    : _begin(begin)
+    , _meta(viewspec)
+    , _nelems(viewspec.size())
+    , _bufsize(sizeof(Meta) + _nelems * sizeof(Element) + Alignment::value)
+    , _hostbuf(begin, host(), _nelems)
   { }
 
-    /* DeviceBuf getDeviceDataBuffer() { */
-    /*   auto accBuf = alpaka::mem::view::getPtrNative(deviceBuf); */
-    /*   // Add MetaOffset bytes offset to the accBuf address */
-    /*   auto deviceBufAddr = reinterpret_cast<NonConstElement *>( */
-    /*       reinterpret_cast<char *>(accBuf) + MetaOffset); */
-    /*   return DeviceBuf(deviceBufAddr); */
-    /* } */
-
-  Element *getData() const
+  // TODO: extract into proper allocator?
+  template <typename Entity>
+  auto alloc_entity_buf(Entity &entity)
   {
-    return begin;
+    using AlpakaEntity = mephisto::entity_traits::device<Entity>;
+    // We're handling bytes here, switch to char/1dim
+    using OneDim = alpaka::dim::DimInt<1>;
+    using BufAcc = alpaka::mem::buf::Buf<AlpakaEntity, char, OneDim, std::size_t>;
+
+    // Return a newly created buffer
+    using EntityBuffer = DeviceDataBuffer<Entity, Element, ViewSpec>;
+    return EntityBuffer{
+        entity,
+        alpaka::mem::buf::alloc<char, std::size_t>(entity.device(), _bufsize)};
+  }
+
+  template <typename Entity>
+  DeviceBuf getDeviceDataBuffer(Entity &entity)
+  {
+    auto accBuf = alpaka::mem::view::getPtrNative(entity.deviceBuf);
+    // Add MetaOffset bytes offset to the accBuf address */
+    auto deviceBufAddr = reinterpret_cast<NonConstElement *>(
+        reinterpret_cast<char *>(accBuf) + MetaOffset);
+    return DeviceBuf(deviceBufAddr);
+  }
+
+  Meta *meta() const
+  {
+    return _meta;
+  }
+
+  Element *data() const
+
+  {
+    return _begin;
   }
 
   auto host() const
@@ -166,7 +192,7 @@ public:
   auto getHostMetaView()
   {
     return alpaka::mem::view::createStaticDevMemView(
-        &meta, host(), static_cast<std::size_t>(1));
+        &_meta, host(), static_cast<std::size_t>(1));
   }
 
   /* auto getDeviceDataView() */
@@ -186,12 +212,24 @@ public:
   /*       context.accDevice, static_cast<std::size_t>(datasize)); */
   /* } */
 
-  HostBuf &getHostDataView()
+  HostBuf &getHostDataView() const
   {
-    return hostBuf;
+    return _hostbuf;
+  }
+
+  size_t datasize() const {
+    return _nelems * sizeof(Element);
+  }
+
+  size_t nelems() const {
+    return _nelems;
+  }
+
+  size_t bufsize() const {
+    return _bufsize;
   }
 };
 
-}
+}  // namespace mephisto
 
 #endif

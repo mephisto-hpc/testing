@@ -12,11 +12,36 @@
 namespace mephisto {
 namespace execution {
 
+  template<typename F>
+  class Kernel
+{
+public:
+    //-----------------------------------------------------------------------------
+    //! The kernel entry point.
+    //!
+    //! \tparam TAcc The accelerator environment to be executed on.
+    //! \tparam TElem The matrix element type.
+    //! \param acc The accelerator to be executed on.
+    //! \param A The first source vector.
+    //! \param B The second source vector.
+    //! \param C The destination vector.
+    //! \param numElements The number of elements.
+    ALPAKA_NO_HOST_ACC_WARNING
+    template <typename TAcc, typename TElem, typename TIdx>
+    ALPAKA_FN_ACC auto operator()(
+        TAcc const &       acc,
+        TElem const *const A,
+        TElem const *const B,
+        TElem *const       C,
+        TIdx const &       numElements) const -> void
+    {
+    }
+};
 
 /**
  * An executor that uses alpaka to do the work.
  */
-template<class Kernel, class AlpakaContext>
+template<class AlpakaContext>
 struct AlpakaExecutor {
     AlpakaContext ctx;
 
@@ -29,62 +54,6 @@ struct AlpakaExecutor {
       : ctx(context)
     {
     }
-#if 0
-    template <class Function, class Iter, class SharedState>
-    void bulk_execute(
-        Function executorFunc, shape_type<IterT> shape, SharedState state)
-    {
-        using ElementT = typename Iter::value_type;
-        using PatternT = typename Iter::pattern_type;
-
-        // ---------------------------------------------
-        // Copy data to the accelerator
-        // ---------------------------------------------
-        auto begin = std::get<0>(shape);
-        auto end = std::get<1>(shape);
-        SizeT nelems = std::distance(begin, end);
-        assert(nelems >= 0);
-
-        alpaka::vec::Vec<alpaka::dim::DimInt<1u>, SizeT> const extent(nelems);
-
-        alpaka::workdiv::WorkDivMembers<alpaka::dim::DimInt<1u>, SizeT> const
-            workDiv(alpaka::workdiv::getValidWorkDiv<Acc>(
-                ctx.accDevice,
-                extent,
-                static_cast<SizeT>(1u),
-                false,
-                alpaka::workdiv::GridBlockExtentSubDivRestrictions::
-                    Unrestricted));
-
-        // create the host buffer
-        auto hostBuf = mephisto::HostDataBuffer<
-            ElementT,
-            AlpakaContext,
-            PatternT,
-            decltype(begin)>(ctx, begin, end);
-
-
-        // copy the buffer to the device
-        mephisto::put(ctx.stream, hostBuf);
-
-        // get the buffer on the device
-        auto deviceBuf = hostBuf.getDeviceDataBuffer();
-
-        Kernel kernel;
-
-        // ---------------------------------------------
-        // Execute the kernel
-        // ---------------------------------------------
-        //
-        auto const forEach(alpaka::kernel::exec<Acc>(
-            workDiv, kernel, deviceBuf, nelems, executorFunc));
-
-        alpaka::queue::enqueue(ctx.stream, forEach);
-
-        // copy the buffer to the device
-        mephisto::get(ctx.stream, hostBuf);
-    }
-#endif
 
     template <
         class Function,
@@ -103,7 +72,7 @@ struct AlpakaExecutor {
       // Assume we have a LocalPattern that lets us iterate over local blocks
       // for each accelerator
       for (auto &entity : ctx.entities()) {
-        for (auto block : pattern.blocks_for_entity(entity)) {
+        for (auto block : pattern.blocks_local_for_entity(entity)) {
           using ViewSpec = decltype(block);
 
           // do work on this block
@@ -114,62 +83,27 @@ struct AlpakaExecutor {
           alpaka::workdiv::WorkDivMembers<dim, std::size_t> const workDiv{
               alpaka::workdiv::getValidWorkDiv<Acc>(entity, extents)};
           // 2. create host buffer, TODO: simplify
-          auto hostBuf =
+          auto host_buf =
               mephisto::HostDataBuffer<value_type, Entity, ViewSpec>{
                   block, pattern.at(block)};
 
           // 3. copy the buffer to the entity
+          auto device_buf = mephisto::put(ctx.stream(), host_buf, entity);
           // 4. work
+          Kernel<Function> kernel;
+
+          auto const taskKernel(alpaka::kernel::createTaskKernel<Acc>(
+              workDiv,
+              kernel,
+              alpaka::mem::view::getPtrNative(device_buf.begin()),
+              block.size()));
+
+          alpaka::queue::enqueue(ctx.stream, kernel);
+
           // 5. copy data back
+          mephisto::get(ctx.stream(), device_buf, host_buf);
         }
-        }
-
-        // ---------------------------------------------
-        // Copy data to the accelerator
-        // ---------------------------------------------
-        auto begin = std::get<0>(shape);
-        auto end = std::get<1>(shape);
-        SizeT nelems = std::distance(begin, end);
-        assert(nelems >= 0);
-
-        alpaka::vec::Vec<alpaka::dim::DimInt<1u>, SizeT> const extent(nelems);
-
-        alpaka::workdiv::WorkDivMembers<alpaka::dim::DimInt<1u>, SizeT> const
-            workDiv(alpaka::workdiv::getValidWorkDiv<Acc>(
-                ctx.accDevice,
-                extent,
-                static_cast<SizeT>(1u),
-                false,
-                alpaka::workdiv::GridBlockExtentSubDivRestrictions::
-                    Unrestricted));
-
-        // create the host buffer
-        auto hostBuf = mephisto::HostDataBuffer<
-            ElementT,
-            AlpakaContext,
-            PatternT,
-            decltype(begin)>(ctx, begin, end);
-
-
-        // copy the buffer to the device
-        mephisto::put(ctx.stream, hostBuf);
-
-        // get the buffer on the device
-        auto deviceBuf = hostBuf.getDeviceDataBuffer();
-
-        Kernel kernel;
-
-        // ---------------------------------------------
-        // Execute the kernel
-        // ---------------------------------------------
-        //
-        auto const forEach(alpaka::kernel::exec<Acc>(
-            workDiv, kernel, deviceBuf, nelems, executorFunc));
-
-        alpaka::queue::enqueue(ctx.stream, forEach);
-
-        // copy the buffer to the device
-        mephisto::get(ctx.stream, hostBuf);
+      }
     }
 
     AlpakaContext &context() const
@@ -178,37 +112,24 @@ struct AlpakaExecutor {
     }
 };
 
-template <class Kernel, class AlpakaContext>
-using AlpakaOneWayExecutor = AlpakaExecutor<Kernel, AlpakaContext, false>;
-
-template <class Kernel, class AlpakaContext>
-using AlpakaTwoWayExecutor = AlpakaExecutor<Kernel, AlpakaContext, true>;
-
-template <class AccT, class HostDevice, class AccDevice, class Stream>
+template <class Entity, class Stream>
 struct AlpakaExecutionContext {
-  using host_t   = typename std::remove_cv<HostDevice>::type;
-  using device_t = typename std::remove_cv<AccDevice>::type;
-  using acc_t    = AccT;
+  using host_t   = alpaka::dev::DevCpu;
+  using entity_t = typename std::remove_cv<Entity>::type;
+  using acc_t    = typename Entity::acc_t;
 
-  HostDevice &hostDevice;
-  AccDevice & accDevice;
-  Stream &    stream;
+  host_t _host_device;
+  Stream     _stream;
 
-  AlpakaExecutionContext(HostDevice &host, AccDevice &acc, Stream &stream)
-    : hostDevice(host)
-    , accDevice(acc)
-    , stream(stream)
+  AlpakaExecutionContext()
+    : _host_device(alpaka::pltf::getDevByIdx<alpaka::pltf::PltfCpu>(0u))
   {
   }
-};
 
-template <class AccT, class HostDevice, class AccDevice, class Stream>
-AlpakaExecutionContext<AccT, HostDevice, AccDevice, Stream> make_context(
-    HostDevice &host, AccDevice &acc, Stream &stream)
-{
-    return AlpakaExecutionContext<AccT, HostDevice, AccDevice, Stream>(
-        host, acc, stream);
-}
+  auto& entities() const {
+    return entity_t::all();
+  }
+};
 
 // See C++17's std::execution::par
 // Additionally we enforce that the policy has an executor
