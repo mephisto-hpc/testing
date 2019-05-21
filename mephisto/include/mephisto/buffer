@@ -16,8 +16,6 @@ namespace mephisto {
  */
 template <typename ViewSpec>
 struct Metadata {
-  static constexpr int NDim = ViewSpec::ndim();
-
   ViewSpec _viewspec;
 
   Metadata(ViewSpec viewspec)
@@ -108,7 +106,7 @@ class HostDataBuffer {
   using NonConstElement   = typename std::remove_const<Element>::type;
   using Host              = typename alpaka::dev::DevCpu;
   using Meta              = Metadata<ViewSpec>;
-  using Dim               = alpaka::dim::DimInt<Meta::NDim>;
+  using Dim               = alpaka::dim::DimInt<Device::NDim>;
   using Idx               = std::size_t;
   using DeviceBuf =
       DeviceDataBuffer<NonConstElement, Device, Meta, Alignment>;
@@ -139,10 +137,11 @@ public:
   template <typename Entity>
   auto alloc_entity_buf(Entity &entity)
   {
-    using AlpakaEntity = mephisto::entity_traits::device<Entity>;
+    using AlpakaEntity =
+        typename mephisto::entity_traits::device<Entity>::type;
     // We're handling bytes here, switch to char/1dim
     using OneDim = alpaka::dim::DimInt<1>;
-    using BufAcc = alpaka::mem::buf::Buf<AlpakaEntity, char, OneDim, std::size_t>;
+    using ufAcc = alpaka::mem::buf::Buf<AlpakaEntity, char, OneDim, std::size_t>;
 
     // Return a newly created buffer
     using EntityBuffer = DeviceDataBuffer<Entity, Element, ViewSpec>;

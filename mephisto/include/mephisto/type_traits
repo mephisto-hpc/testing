@@ -15,7 +15,7 @@ template <typename T> struct is_accelerator {
 namespace entity_traits {
 template <typename T>
 struct device {
-  using type = typename T::device_type;
+  using type = typename T::acc_t;
 };
 }  // namespace entity_traits
 }  // namespace mephisto

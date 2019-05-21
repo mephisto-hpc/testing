@@ -23,6 +23,8 @@ struct Entity {
   using acc_t  = AlpakaAcc<alpaka_dim_t, Size>;
   using pltf_t = alpaka::pltf::Pltf<acc_t>;
 
+  constexpr static std::size_t NDim = Dim;
+
   Entity(std::size_t i)
     : _index(i)
   {

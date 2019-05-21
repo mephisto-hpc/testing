@@ -14,7 +14,7 @@ namespace mephisto {
  * TODO: evaluate how well this could be implemented with STL-like code
  */
 template <typename Stream, typename Buffer, typename Entity>
-void put(Stream &stream, Buffer &buf, Entity &entity)
+auto put(Stream &&stream, Buffer &buf, Entity &entity)
 {
   alpaka::vec::Vec<alpaka::dim::DimInt<1u>, size_t> const extent =
       buf.datasize();
@@ -28,6 +28,7 @@ void put(Stream &stream, Buffer &buf, Entity &entity)
   alpaka::mem::view::copy(stream, entity_buf.meta(), meta, 1);
   // Copy the actual elements
   alpaka::mem::view::copy(stream, entity_buf.data(), data, buf.datasize());
+  return entity_buf;
 };
 
 template <typename Stream, typename EntityBuf, typename HostBuf>
