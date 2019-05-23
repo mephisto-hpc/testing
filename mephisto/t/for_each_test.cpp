@@ -42,12 +42,12 @@ TEST_F(ForEachTest, itWorks) {
   dash::transform(policy, arr.begin(), arr.end(), arr.begin(), [] (const Data i) { printf("i: %d\n", i); return i + 1; });
 
   // Check the written coordinates using the standard for_each_with_index
-  dash::for_each_with_index(
-      arr.begin(),
-      arr.end(),
-      [&pattern](const Data &d, PatternT::index_type i) {
+  /* dash::for_each_with_index( */
+  /*     arr.begin(), */
+  /*     arr.end(), */
+  /*     [&pattern](const Data &d, PatternT::index_type i) { */
         
-      });
+  /*     }); */
 }
 
 

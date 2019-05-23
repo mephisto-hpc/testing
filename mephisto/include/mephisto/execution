@@ -72,8 +72,8 @@ struct AlpakaExecutor {
 
       // Assume we have a LocalPattern that lets us iterate over local blocks
       // for each accelerator
-      for (auto &entity : ctx.entities()) {
-        for (auto block : pattern.blocks_local_for_entity(entity)) {
+      for (auto const &entity : ctx.entities()) {
+        for (auto const &block : pattern.blocks_local_for_entity(entity)) {
           using ViewSpec = decltype(block);
 
           // do work on this block

@@ -40,7 +40,7 @@ struct Entity {
     return alpaka::pltf::getDevCount<pltf_t>();
   }
 
-  acc_t device() const
+  auto device() const
   {
     return alpaka::pltf::getDevByIdx<pltf_t>(_index);
   }

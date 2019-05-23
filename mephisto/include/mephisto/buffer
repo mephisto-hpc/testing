@@ -44,11 +44,11 @@ struct Metadata {
 
 template <
     typename Element,
-    typename Device,
+    typename Entity,
     typename ViewSpec,
     typename Alignment =
         typename alpaka::core::align::OptimalAlignment<sizeof(Element)>::type>
-class DeviceDataBuffer {
+struct DeviceDataBuffer {
 
   using Meta = Metadata<ViewSpec>;
 
@@ -57,13 +57,13 @@ class DeviceDataBuffer {
       sizeof(Meta) + sizeof(Meta) % Alignment::value;
   Element *data;
 
-  DeviceDataBuffer(Device dev, Element *base)
+  DeviceDataBuffer(Entity ent, const void *base)
     : data(data)
   {
   }
 
   ALPAKA_FN_HOST_ACC
-  const Meta &getMeta() const
+  const Meta &meta() const
   {
     // get the memory MetaOffset bytes before data
     return *reinterpret_cast<Meta *>(
@@ -104,7 +104,7 @@ template <
         typename alpaka::core::align::OptimalAlignment<sizeof(Element)>::type>
 class HostDataBuffer {
   using NonConstElement   = typename std::remove_const<Element>::type;
-  using Host              = typename alpaka::dev::DevCpu;
+  using Host              = alpaka::dev::DevCpu;
   using Meta              = Metadata<ViewSpec>;
   using Dim               = alpaka::dim::DimInt<Device::NDim>;
   using Idx               = std::size_t;
@@ -144,10 +144,10 @@ public:
     using ufAcc = alpaka::mem::buf::Buf<AlpakaEntity, char, OneDim, std::size_t>;
 
     // Return a newly created buffer
-    using EntityBuffer = DeviceDataBuffer<Entity, Element, ViewSpec>;
+    using EntityBuffer = DeviceDataBuffer<Element, Entity, ViewSpec>;
     return EntityBuffer{
         entity,
-        alpaka::mem::buf::alloc<char, std::size_t>(entity.device(), _bufsize)};
+        alpaka::mem::view::getPtrNative(alpaka::mem::buf::alloc<char, std::size_t>(entity.device(), _bufsize))};
   }
 
   template <typename Entity>

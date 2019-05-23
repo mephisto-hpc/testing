@@ -1,6 +1,8 @@
 #ifndef MEPHISTO_TYPE_TRAITS
 #define MEPHISTO_TYPE_TRAITS
 
+#include <alpaka/alpaka.hpp>
+
 namespace mephisto {
 
 namespace buf_traits {
@@ -15,7 +17,7 @@ template <typename T> struct is_accelerator {
 namespace entity_traits {
 template <typename T>
 struct device {
-  using type = typename T::acc_t;
+  using type = typename alpaka::dev::traits::DevType<typename T::acc_t>::type;
 };
 }  // namespace entity_traits
 }  // namespace mephisto
