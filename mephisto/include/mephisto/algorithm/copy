@@ -25,9 +25,15 @@ auto put(Stream &&stream, Buffer &buf, Entity &entity)
   auto entity_buf = buf.alloc_entity_buf(entity);
 
   // Copy metadata to the beginning of the buffer on the device
-  alpaka::mem::view::copy(stream, entity_buf.meta(), meta, 1);
+  auto host_meta   = buf.meta_view();
+  auto device_meta = entity_buf.meta_view();
+  alpaka::mem::view::copy(stream, host_meta, device_meta, 1);
+
   // Copy the actual elements
-  alpaka::mem::view::copy(stream, entity_buf.data(), data, buf.datasize());
+  auto device_data = entity_buf.data_view();
+  auto host_data   = buf.data_view();
+  alpaka::mem::view::copy(stream, host_data, device_data, buf.datasize());
+
   return entity_buf;
 };
 

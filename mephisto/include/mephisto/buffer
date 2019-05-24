@@ -55,10 +55,12 @@ struct DeviceDataBuffer {
 
   static constexpr size_t MetaOffset =
       sizeof(Meta) + sizeof(Meta) % Alignment::value;
-  Element *data;
+  Element *_data;
+  void *   _base;
 
-  DeviceDataBuffer(Entity ent, const void *base)
-    : data(data)
+  DeviceDataBuffer(Entity ent, void *base)
+    : _base(base)
+    , _data(reinterpret_cast<char *>(base) + MetaOffset)
   {
   }
 
@@ -66,8 +68,13 @@ struct DeviceDataBuffer {
   const Meta &meta() const
   {
     // get the memory MetaOffset bytes before data
-    return *reinterpret_cast<Meta *>(
-        reinterpret_cast<char *>(data) - MetaOffset);
+    return *reinterpret_cast<Meta *>(_base);
+  }
+
+  ALPAKA_FN_HOST_ACC
+  const Meta meta_view() const {
+    return alpaka::mem::view::createStaticDevMemView(
+        meta(), host(), static_cast<std::size_t>(1));
   }
 
   /**
@@ -85,7 +92,7 @@ struct DeviceDataBuffer {
   ALPAKA_FN_HOST_ACC
   Element *end() const
   {
-    return begin() + getMeta().chunkSize;
+    return begin() + meta().size();
   }
 };
 
@@ -137,17 +144,12 @@ public:
   template <typename Entity>
   auto alloc_entity_buf(Entity &entity)
   {
-    using AlpakaEntity =
-        typename mephisto::entity_traits::device<Entity>::type;
-    // We're handling bytes here, switch to char/1dim
-    using OneDim = alpaka::dim::DimInt<1>;
-    using ufAcc = alpaka::mem::buf::Buf<AlpakaEntity, char, OneDim, std::size_t>;
-
-    // Return a newly created buffer
+    // Return a newly created and allocated buffer
     using EntityBuffer = DeviceDataBuffer<Element, Entity, ViewSpec>;
-    return EntityBuffer{
-        entity,
-        alpaka::mem::view::getPtrNative(alpaka::mem::buf::alloc<char, std::size_t>(entity.device(), _bufsize))};
+    return EntityBuffer{entity,
+                        alpaka::mem::view::getPtrNative(
+                            alpaka::mem::buf::alloc<char, std::size_t>(
+                                entity.device(), _bufsize))};
   }
 
   template <typename Entity>
@@ -188,7 +190,7 @@ public:
    * static_cast<std::size_t>(1)); */
   /* } */
 
-  auto getHostMetaView()
+  auto meta_view() const
   {
     return alpaka::mem::view::createStaticDevMemView(
         &_meta, host(), static_cast<std::size_t>(1));
@@ -211,9 +213,10 @@ public:
   /*       context.accDevice, static_cast<std::size_t>(datasize)); */
   /* } */
 
-  HostBuf &getHostDataView() const
+  HostBuf &data_view() const
   {
-    return _hostbuf;
+    return alpaka::mem::view::createStaticDevMemView(
+        data(), host(), _meta.size());
   }
 
   size_t datasize() const {
