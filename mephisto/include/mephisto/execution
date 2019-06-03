@@ -32,8 +32,6 @@ public:
     ALPAKA_FN_ACC auto operator()(
         TAcc const &       acc,
         TElem const *const A,
-        TElem const *const B,
-        TElem *const       C,
         TIdx const &       numElements) const -> void
     {
     }
@@ -73,7 +71,7 @@ struct AlpakaExecutor {
       // Assume we have a LocalPattern that lets us iterate over local blocks
       // for each accelerator
       for (auto const &entity : ctx.entities()) {
-        for (auto const &block : pattern.blocks_local_for_entity(entity)) {
+        for (auto &block : pattern.blocks_local_for_entity(entity)) {
           using ViewSpec = decltype(block);
 
           // do work on this block
@@ -82,7 +80,7 @@ struct AlpakaExecutor {
           alpaka::vec::Vec<dim, std::size_t> const extents(std::size_t{1},std::size_t{1},std::size_t{1});
           auto                                     offsets = block.offsets();
           alpaka::workdiv::WorkDivMembers<dim, std::size_t> const workDiv{
-              alpaka::workdiv::getValidWorkDiv<Acc>(entity, extents, extents)};
+              alpaka::workdiv::getValidWorkDiv<Acc>(entity.device(), extents, extents)};
           // 2. create host buffer, TODO: simplify
           auto block_begin =
               static_cast<typename Shape::pointer>(iter.globmem().begin()) +
@@ -100,10 +98,11 @@ struct AlpakaExecutor {
           auto const taskKernel(alpaka::kernel::createTaskKernel<Acc>(
               workDiv,
               kernel,
-              alpaka::mem::view::getPtrNative(device_buf.begin()),
+              device_buf.begin(),
               block.size()));
 
-          alpaka::queue::enqueue(ctx.queue(), kernel);
+          auto queue = ctx.queue();
+          alpaka::queue::enqueue(queue, kernel);
 
           // 5. copy data back
           mephisto::get(ctx.queue(), device_buf, host_buf);
@@ -135,7 +134,7 @@ struct AlpakaExecutionContext {
     return entity_t::all();
   }
 
-  auto queue() const {
+  auto& queue() const {
     return _queue;
   }
 };

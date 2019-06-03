@@ -49,18 +49,33 @@ template <
     typename Alignment =
         typename alpaka::core::align::OptimalAlignment<sizeof(Element)>::type>
 struct DeviceDataBuffer {
+  using Meta     = Metadata<ViewSpec>;
+  using device_t = typename entity_traits::device<Entity>::type;
+  using acc_t = typename entity_traits::acc<Entity>::type;
 
-  using Meta = Metadata<ViewSpec>;
-
+  // We need to save the PlainPtr views here, so we don't have to keep an
+  // instance of the device here, too.
+  using meta_view_t = alpaka::mem::view::ViewPlainPtr<
+      acc_t,
+      Meta,
+      alpaka::dim::DimInt<1>,
+      std::size_t>;
+  using data_view_t = alpaka::mem::view::
+      ViewPlainPtr<Element *, device_t, int, ViewSpec>;
 
   static constexpr size_t MetaOffset =
       sizeof(Meta) + sizeof(Meta) % Alignment::value;
+
   Element *_data;
   void *   _base;
+  std::size_t _entity_index;
 
-  DeviceDataBuffer(Entity ent, void *base)
+  DeviceDataBuffer(Entity ent, Element *base)
+
     : _base(base)
-    , _data(reinterpret_cast<char *>(base) + MetaOffset)
+    , _entity_index(ent.index())
+    , _data(reinterpret_cast<Element *>(
+          reinterpret_cast<char *>(base) + MetaOffset))
   {
   }
 
@@ -74,7 +89,7 @@ struct DeviceDataBuffer {
   ALPAKA_FN_HOST_ACC
   const Meta meta_view() const {
     return alpaka::mem::view::createStaticDevMemView(
-        meta(), host(), static_cast<std::size_t>(1));
+        meta(), entity().device(), static_cast<std::size_t>(1));
   }
 
   /**
@@ -83,7 +98,7 @@ struct DeviceDataBuffer {
   ALPAKA_FN_HOST_ACC
   Element *begin()
   {
-    return data;
+    return _data;
   }
 
   /**
@@ -93,6 +108,10 @@ struct DeviceDataBuffer {
   Element *end() const
   {
     return begin() + meta().size();
+  }
+
+  Entity entity() {
+    return Entity(_entity_index);
   }
 };
 
@@ -118,26 +137,24 @@ class HostDataBuffer {
   using DeviceBuf =
       DeviceDataBuffer<NonConstElement, Device, Meta, Alignment>;
   using HostBuf =
-      alpaka::mem::view::ViewPlainPtr<Host, Element, Dim, std::size_t>;
+      alpaka::mem::view::ViewPlainPtr<Host, NonConstElement, Dim, Idx>;
 
   static constexpr size_t MetaOffset =
       sizeof(Meta) + sizeof(Meta) % Alignment::value;
 
-  Element *   _begin;
-  std::size_t _bufsize;
-  std::size_t _nelems;
-  Meta        _meta;
-  HostBuf     _hostbuf;
+  Element *      _begin;
+  std::size_t    _nelems;
+  std::size_t    _bufsize;
+  Meta           _meta;
 
 public:
   HostDataBuffer(
       ViewSpec viewspec,
-      const Element *  begin)
+      Element *  begin)
     : _begin(begin)
     , _meta(viewspec)
     , _nelems(viewspec.size())
     , _bufsize(sizeof(Meta) + _nelems * sizeof(Element) + Alignment::value)
-    , _hostbuf(begin, host(), _nelems)
   { }
 
   // TODO: extract into proper allocator?
@@ -145,11 +162,12 @@ public:
   auto alloc_entity_buf(Entity &entity)
   {
     // Return a newly created and allocated buffer
-    using EntityBuffer = DeviceDataBuffer<Element, Entity, ViewSpec>;
+    using EntityBuffer = DeviceDataBuffer<NonConstElement, Entity, ViewSpec>;
+    auto buf =
+        alpaka::mem::buf::alloc<char, std::size_t>(entity.device(), _bufsize);
     return EntityBuffer{entity,
-                        alpaka::mem::view::getPtrNative(
-                            alpaka::mem::buf::alloc<char, std::size_t>(
-                                entity.device(), _bufsize))};
+                        reinterpret_cast<NonConstElement *>(
+                            alpaka::mem::view::getPtrNative(buf))};
   }
 
   template <typename Entity>
@@ -162,9 +180,9 @@ public:
     return DeviceBuf(deviceBufAddr);
   }
 
-  Meta *meta() const
+  const Meta *meta() const
   {
-    return _meta;
+    return &_meta;
   }
 
   Element *data() const
