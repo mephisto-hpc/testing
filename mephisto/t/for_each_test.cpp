@@ -11,7 +11,6 @@
 TEST_F(ForEachTest, itWorks) {
   auto const Dim = 3;
   using Data     = int;
-  using MetaT    = typename mephisto::Metadata<PatternT>;
   using ViewT    = typename dash::Array<Data>::local_type;
   using SizeT    = ArrayT::size_type;
   using EntityT =

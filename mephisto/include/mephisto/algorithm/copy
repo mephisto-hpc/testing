@@ -1,10 +1,10 @@
 #ifndef MEPHISTO_COPY
 #define MEPHISTO_COPY
 
-#include <mephisto/type_traits>
 #include <alpaka/alpaka.hpp>
-#include <mephisto/array>
 #include <iostream>
+#include <mephisto/array>
+#include <mephisto/type_traits>
 
 namespace mephisto {
 
@@ -14,34 +14,30 @@ namespace mephisto {
  * TODO: evaluate how well this could be implemented with STL-like code
  */
 template <typename Stream, typename Buffer, typename Entity>
-auto put(Stream &&stream, Buffer &buf, Entity &entity)
+auto put(Stream &stream, Buffer &buf, Entity &entity)
 {
-  alpaka::vec::Vec<alpaka::dim::DimInt<1u>, size_t> const extent =
-      buf.datasize();
-  auto meta    = buf.meta();
-  auto data    = buf.data();
-  auto bufsize = buf.bufsize();
+  alpaka::vec::Vec<alpaka::dim::DimInt<1u>, size_t> const meta_extent{
+      static_cast<std::size_t>(1)};
 
+  // Allocate the buffer before copying
   auto entity_buf = buf.alloc_entity_buf(entity);
-#if 0
+
   // Copy metadata to the beginning of the buffer on the device
   auto host_meta   = buf.meta_view();
   auto device_meta = entity_buf.meta_view();
-  alpaka::mem::view::copy(stream, host_meta, device_meta, 1);
+  alpaka::mem::view::copy(stream, host_meta, device_meta, meta_extent);
 
   // Copy the actual elements
-  auto device_data = entity_buf.data_view();
   auto host_data   = buf.data_view();
-  alpaka::mem::view::copy(stream, host_data, device_data, buf.datasize());
+  auto device_data = entity_buf.data_view();
+  alpaka::mem::view::copy(stream, host_data, device_data, buf.extents());
 
-#endif
   return entity_buf;
 };
 
 template <typename Stream, typename EntityBuf, typename HostBuf>
-void get(Stream &stream, EntityBuf &entity_buf, HostBuf &host_buf)
-{
-  // TODO: implement
+void get(Stream &stream, EntityBuf &entity_buf, HostBuf &host_buf){
+    // TODO: implement
 };
 
 }  // namespace mephisto

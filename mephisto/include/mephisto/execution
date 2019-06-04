@@ -1,119 +1,117 @@
 #ifndef MEPHISTO_EXECUTION_H
 #define MEPHISTO_EXECUTION_H
 
-
-#include <memory>
-#include <alpaka/alpaka.hpp>
-#include <libdash.h>
 #include <dash/Execution.h>
-#include <mephisto/buffer>
+#include <libdash.h>
+#include <alpaka/alpaka.hpp>
+#include <memory>
 #include <mephisto/algorithm/copy>
 #include <mephisto/algorithm/for_each>
+#include <mephisto/buffer>
 
 namespace mephisto {
 namespace execution {
 
-  template<typename F>
-  class Kernel
-{
+template <typename F>
+class Kernel {
 public:
-    //-----------------------------------------------------------------------------
-    //! The kernel entry point.
-    //!
-    //! \tparam TAcc The accelerator environment to be executed on.
-    //! \tparam TElem The matrix element type.
-    //! \param acc The accelerator to be executed on.
-    //! \param A The first source vector.
-    //! \param B The second source vector.
-    //! \param C The destination vector.
-    //! \param numElements The number of elements.
-    ALPAKA_NO_HOST_ACC_WARNING
-    template <typename TAcc, typename TElem, typename TIdx>
-    ALPAKA_FN_ACC auto operator()(
-        TAcc const &       acc,
-        TElem const *const A,
-        TIdx const &       numElements) const -> void
-    {
-    }
+  //-----------------------------------------------------------------------------
+  //! The kernel entry point.
+  //!
+  //! \tparam TAcc The accelerator environment to be executed on.
+  //! \tparam TElem The matrix element type.
+  //! \param acc The accelerator to be executed on.
+  //! \param A The first source vector.
+  //! \param B The second source vector.
+  //! \param C The destination vector.
+  //! \param numElements The number of elements.
+  ALPAKA_NO_HOST_ACC_WARNING
+  template <typename TAcc, typename TElem, typename TIdx>
+  ALPAKA_FN_ACC auto operator()(
+      TAcc const &acc, TElem const *const A, TIdx const &numElements) const
+      -> void
+  {
+  }
 };
 
 /**
  * An executor that uses alpaka to do the work.
  */
-template<class AlpakaContext>
+template <class AlpakaContext>
 struct AlpakaExecutor {
-    AlpakaContext ctx;
+  AlpakaContext ctx;
 
-    // Wrapper entity
-    using Entity = typename AlpakaContext::entity_t;
-    // Alpaka entity/accelerator
-    using Acc    = typename Entity::acc_t;
+  // Wrapper entity
+  using Entity = typename AlpakaContext::entity_t;
+  // Alpaka entity/accelerator
+  using Acc = typename Entity::acc_t;
 
-    AlpakaExecutor(AlpakaContext context)
-      : ctx(context)
-    {
-    }
+  AlpakaExecutor(AlpakaContext context)
+    : ctx(context)
+  {
+  }
 
-    template <
-        class Function,
-        class Shape,
-        class ResultFactory,
-        class SharedFactory>
-    void bulk_twoway_execute(
-        Function f, Shape iter, ResultFactory result, SharedFactory sf) const
-    {
-      auto &pattern = iter.pattern();
+  template <
+      class Function,
+      class Shape,
+      class ResultFactory,
+      class SharedFactory>
+  void bulk_twoway_execute(
+      Function f, Shape iter, ResultFactory result, SharedFactory sf) const
+  {
+    auto &pattern = iter.pattern();
 
-      using PatternT   = typename Shape::pattern_type;
-      using value_type = typename Shape::value_type;
-      using dim        = alpaka::dim::DimInt<PatternT::ndim()>;
+    using PatternT   = typename Shape::pattern_type;
+    using value_type = typename Shape::value_type;
+    using dim        = alpaka::dim::DimInt<PatternT::ndim()>;
 
-      // Assume we have a LocalPattern that lets us iterate over local blocks
-      // for each accelerator
-      for (auto const &entity : ctx.entities()) {
-        for (auto &block : pattern.blocks_local_for_entity(entity)) {
-          using ViewSpec = decltype(block);
+    auto queue = ctx.queue();
 
-          // do work on this block
+    // Assume we have a LocalPattern that lets us iterate over local blocks
+    // for each accelerator
+    for (auto const &entity : ctx.entities()) {
+      for (auto &block : pattern.blocks_local_for_entity(entity)) {
+        using ViewSpec = decltype(block);
 
-          // 1. create workdiv from block
-          alpaka::vec::Vec<dim, std::size_t> const extents(std::size_t{1},std::size_t{1},std::size_t{1});
-          auto                                     offsets = block.offsets();
-          alpaka::workdiv::WorkDivMembers<dim, std::size_t> const workDiv{
-              alpaka::workdiv::getValidWorkDiv<Acc>(entity.device(), extents, extents)};
-          // 2. create host buffer, TODO: simplify
-          auto block_begin =
-              static_cast<typename Shape::pointer>(iter.globmem().begin()) +
-              pattern.global_at(block.offsets());
+        // do work on this block
 
-          auto host_buf =
-              mephisto::HostDataBuffer<value_type, Entity, ViewSpec>{
-                  block, block_begin.local()};
+        // 1. create workdiv from block
+        alpaka::vec::Vec<dim, std::size_t> const extents(
+            std::size_t{1}, std::size_t{1}, std::size_t{1});
+        auto offsets = block.offsets();
+        alpaka::workdiv::WorkDivMembers<dim, std::size_t> const workDiv{
+            alpaka::workdiv::getValidWorkDiv<Acc>(
+                entity.device(), extents, extents)};
+        // 2. create host buffer, TODO: simplify
+        auto block_begin =
+            static_cast<typename Shape::pointer>(iter.globmem().begin()) +
+            pattern.global_at(block.offsets());
 
-          // 3. copy the buffer to the entity
-          auto device_buf = mephisto::put(ctx.queue(), host_buf, entity);
-          // 4. work
-          Kernel<Function> kernel;
+        auto host_buf =
+            mephisto::HostDataBuffer<value_type, Entity, PatternT::ndim()>{
+                block, block_begin.local()};
 
-          auto const taskKernel(alpaka::kernel::createTaskKernel<Acc>(
-              workDiv,
-              kernel,
-              device_buf.begin(),
-              block.size()));
+        // 3. copy the buffer to the entity
+        auto device_buf = mephisto::put(queue, host_buf, entity);
 
-          auto queue = ctx.queue();
-          alpaka::queue::enqueue(queue, kernel);
+        // 4. work
+        Kernel<Function> kernel;
 
-          // 5. copy data back
-          mephisto::get(ctx.queue(), device_buf, host_buf);
-        }
+        auto const taskKernel(alpaka::kernel::createTaskKernel<Acc>(
+            workDiv, kernel, device_buf.begin(), block.size()));
+
+        alpaka::queue::enqueue(queue, taskKernel);
+
+        // 5. copy data back
+        mephisto::get(ctx.queue(), device_buf, host_buf);
       }
     }
+  }
 
-    AlpakaContext &context() const
-    {
-        return ctx;
-    }
+  AlpakaContext &context() const
+  {
+    return ctx;
+  }
 };
 
 template <class Entity, class Queue>
@@ -123,18 +121,21 @@ struct AlpakaExecutionContext {
   using acc_t    = typename Entity::acc_t;
 
   host_t _host_device;
-  Queue     _queue;
+  Queue  _queue;
 
   AlpakaExecutionContext()
-    : _host_device(alpaka::pltf::getDevByIdx<alpaka::pltf::PltfCpu>(0u)), _queue(_host_device)
+    : _host_device(alpaka::pltf::getDevByIdx<alpaka::pltf::PltfCpu>(0u))
+    , _queue(_host_device)
   {
   }
 
-  auto entities() const {
+  auto entities() const
+  {
     return entity_t::all();
   }
 
-  auto& queue() const {
+  auto &queue() const
+  {
     return _queue;
   }
 };
@@ -159,7 +160,7 @@ struct ParallelPolicy {
 template <class Executor>
 ParallelPolicy<Executor> make_parallel_policy(Executor ex)
 {
-    return ParallelPolicy<Executor>(ex);
+  return ParallelPolicy<Executor>(ex);
 }
 }  // namespace execution
 }  // namespace mephisto
@@ -168,7 +169,7 @@ namespace dash {
 
 template <class Executor>
 struct is_execution_policy<mephisto::execution::ParallelPolicy<Executor>>
-    : public std::true_type {
+  : public std::true_type {
 };
 
 }  // namespace dash

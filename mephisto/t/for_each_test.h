@@ -22,7 +22,7 @@ public:
   static const int Dim        = 3;
   using Data       = Pos;
   using PatternT   = dash::BlockPattern<Dim>;
-  using MetaT      = typename mephisto::Metadata<PatternT>;
+  using MetaT      = typename mephisto::Metadata<Dim>;
   using ViewT      = typename dash::Array<Data>::local_type;
   using AlpakaDim  = alpaka::dim::DimInt<Dim>;
   using ArrayT     = dash::Array<Data, dash::default_index_t, PatternT>;
