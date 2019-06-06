@@ -4,6 +4,7 @@
 
 #include <mephisto/array>
 #include <mephisto/type_traits>
+#include <mephisto/util>
 #include <type_traits>
 
 #include <iostream>
@@ -12,16 +13,6 @@
 
 namespace mephisto {
 
-namespace detail {
-template <std::size_t n>
-struct arr_to_vec {
-  template <typename T>
-  static auto create(T &arr)
-  {
-    return arr[n];
-  }
-};
-}  // namespace detail
 
 /**
  * Information about a local chunk of memory and its coordinates relative to
@@ -46,10 +37,10 @@ public:
   ALPAKA_FN_HOST Metadata(
       LocalArray<std::size_t, Dim> offsets,
       LocalArray<std::size_t, Dim> extents)
-    : _offsets(alpaka::vec::createVecFromIndexedFn<dim_t, detail::arr_to_vec>(
-          offsets))
-    , _extents(alpaka::vec::createVecFromIndexedFn<dim_t, detail::arr_to_vec>(
-          extents))
+    : _offsets(
+          alpaka::vec::createVecFromIndexedFn<dim_t, arr_to_vec>(offsets))
+    , _extents(
+          alpaka::vec::createVecFromIndexedFn<dim_t, arr_to_vec>(extents))
   {
   }
 

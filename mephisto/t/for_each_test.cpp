@@ -21,7 +21,7 @@ TEST_F(ForEachTest, itWorks) {
   using PatternT    = patterns::BalancedLocalPattern<BasePattern, EntityT>;
   using ArrayT      = dash::Array<Data, dash::default_index_t, PatternT>;
 
-  BasePattern base{10, 10, 10};
+  BasePattern base{5, 5, 2};
   PatternT pattern{base};
   ArrayT   arr{pattern};
   dash::fill(arr.begin(), arr.end(), 42);
@@ -38,15 +38,17 @@ TEST_F(ForEachTest, itWorks) {
   auto policy = mephisto::execution::make_parallel_policy(executor);
 
   // set the coordinates using an Alpaka policy
-  dash::transform(policy, arr.begin(), arr.end(), arr.begin(), [] (const Data i) { printf("i: %d\n", i); return i + 1; });
+  dash::transform(
+      policy, arr.begin(), arr.end(), arr.begin(), [](const Data i) {
+        printf("i: %d\n", i);
+        return i + 1;
+      });
 
   // Check the written coordinates using the standard for_each_with_index
-  /* dash::for_each_with_index( */
-  /*     arr.begin(), */
-  /*     arr.end(), */
-  /*     [&pattern](const Data &d, PatternT::index_type i) { */
-        
-  /*     }); */
+  dash::for_each(
+      arr.begin(), arr.end(), [](const Data &d) {
+        std::cout << "Result :" << d << std::endl;
+      });
 }
 
 

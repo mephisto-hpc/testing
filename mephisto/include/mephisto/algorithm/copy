@@ -25,19 +25,25 @@ auto put(Stream &stream, Buffer &buf, Entity &entity)
   // Copy metadata to the beginning of the buffer on the device
   auto host_meta   = buf.meta_view();
   auto device_meta = entity_buf.meta_view();
-  alpaka::mem::view::copy(stream, host_meta, device_meta, meta_extent);
+  alpaka::mem::view::copy(stream, device_meta, host_meta, meta_extent);
 
   // Copy the actual elements
   auto host_data   = buf.data_view();
   auto device_data = entity_buf.data_view();
-  alpaka::mem::view::copy(stream, host_data, device_data, buf.extents());
+  alpaka::mem::view::copy(stream, device_data, host_data, buf.extents());
 
   return entity_buf;
 };
 
 template <typename Stream, typename EntityBuf, typename HostBuf>
 void get(Stream &stream, EntityBuf &entity_buf, HostBuf &host_buf){
-    // TODO: implement
+  alpaka::vec::Vec<alpaka::dim::DimInt<1u>, size_t> const meta_extent{
+      static_cast<std::size_t>(1)};
+
+  // Copy the actual elements
+  auto host_data   = host_buf.data_view();
+  auto device_data = entity_buf.data_view();
+  alpaka::mem::view::copy(stream, host_data, device_data, host_buf.extents());
 };
 
 }  // namespace mephisto

@@ -8,29 +8,36 @@
 #include <mephisto/algorithm/copy>
 #include <mephisto/algorithm/for_each>
 #include <mephisto/buffer>
+#include <mephisto/util>
 
 namespace mephisto {
 namespace execution {
 
 template <typename F>
 class Kernel {
+  F _func;
 public:
-  //-----------------------------------------------------------------------------
-  //! The kernel entry point.
-  //!
-  //! \tparam TAcc The accelerator environment to be executed on.
-  //! \tparam TElem The matrix element type.
-  //! \param acc The accelerator to be executed on.
-  //! \param A The first source vector.
-  //! \param B The second source vector.
-  //! \param C The destination vector.
-  //! \param numElements The number of elements.
+
+  Kernel(F func) : _func(func) {}
+
   ALPAKA_NO_HOST_ACC_WARNING
   template <typename TAcc, typename TElem, typename TIdx>
   ALPAKA_FN_ACC auto operator()(
-      TAcc const &acc, TElem const *const A, TIdx const &numElements) const
+      TAcc const &acc, TElem *const A, TElem * res, TIdx const &numElements) const
       -> void
   {
+    const uint32_t blockIndex(static_cast<uint32_t>(
+        alpaka::idx::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0]));
+    const uint32_t threadIndex(static_cast<uint32_t>(
+        alpaka::idx::getIdx<alpaka::Block, alpaka::Threads>(acc)[0]));
+    const uint32_t gridDimension(static_cast<uint32_t>(
+        alpaka::workdiv::getWorkDiv<alpaka::Grid, alpaka::Blocks>(acc)[0]));
+
+    // TODO: fix for dimensions > 1
+    const uint32_t i(static_cast<uint32_t>(
+        alpaka::idx::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0]));
+
+    _func(i, A, res);
   }
 };
 
@@ -71,17 +78,19 @@ struct AlpakaExecutor {
     // for each accelerator
     for (auto const &entity : ctx.entities()) {
       for (auto &block : pattern.blocks_local_for_entity(entity)) {
-        using ViewSpec = decltype(block);
-
-        // do work on this block
-
+        if (block.size() == 0) {
+          continue;
+        }
         // 1. create workdiv from block
-        alpaka::vec::Vec<dim, std::size_t> const extents(
-            std::size_t{1}, std::size_t{1}, std::size_t{1});
+        auto extents = alpaka::vec::createVecFromIndexedFn<dim, arr_to_vec>(
+            block.extents());
+        std::size_t one = 1;
+        alpaka::vec::Vec<dim, std::size_t> thread_extent{one, one, one};
         auto offsets = block.offsets();
         alpaka::workdiv::WorkDivMembers<dim, std::size_t> const workDiv{
             alpaka::workdiv::getValidWorkDiv<Acc>(
-                entity.device(), extents, extents)};
+                entity.device(), extents, thread_extent)};
+
         // 2. create host buffer, TODO: simplify
         auto block_begin =
             static_cast<typename Shape::pointer>(iter.globmem().begin()) +
@@ -95,15 +104,15 @@ struct AlpakaExecutor {
         auto device_buf = mephisto::put(queue, host_buf, entity);
 
         // 4. work
-        Kernel<Function> kernel;
+        Kernel<Function> kernel(f);
 
         auto const taskKernel(alpaka::kernel::createTaskKernel<Acc>(
-            workDiv, kernel, device_buf.begin(), block.size()));
+            workDiv, kernel, device_buf.begin(), device_buf.begin(), block.size()));
 
         alpaka::queue::enqueue(queue, taskKernel);
 
         // 5. copy data back
-        mephisto::get(ctx.queue(), device_buf, host_buf);
+        mephisto::get(queue, device_buf, host_buf);
       }
     }
   }

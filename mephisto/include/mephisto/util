@@ -1,0 +1,23 @@
+#ifndef MEPHISTO_UTIL_H
+#define MEPHISTO_UTIL_H
+
+#include <cstddef>
+
+namespace mephisto {
+
+/**
+ * Helper to convert std::array to alpaka's Vec
+ *
+ * alpaka::vec::createVecFromIndexedFn<dim_t, arr_to_vec>(arr)
+ */
+template <std::size_t n>
+struct arr_to_vec {
+  template <typename T>
+  static constexpr auto create(T &arr)
+  {
+    return arr[n];
+  }
+};
+}  // namespace mephisto
+
+#endif
