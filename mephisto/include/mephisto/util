@@ -18,6 +18,15 @@ struct arr_to_vec {
     return arr[n];
   }
 };
+
+template <std::size_t n>
+struct unity_vec {
+  template <typename T>
+  static constexpr auto create(T arg)
+  {
+    return arg;
+  }
+};
 }  // namespace mephisto
 
 #endif

@@ -21,10 +21,12 @@ public:
   Kernel(F func) : _func(func) {}
 
   ALPAKA_NO_HOST_ACC_WARNING
-  template <typename TAcc, typename TElem, typename TIdx>
+  template <typename TAcc, typename TElem, typename TRes, typename TIdx>
   ALPAKA_FN_ACC auto operator()(
-      TAcc const &acc, TElem *const A, TElem * res, TIdx const &numElements) const
-      -> void
+      TAcc const & acc,
+      TElem *const A,
+      TRes *       res,
+      TIdx const & numElements) const -> void
   {
     const uint32_t blockIndex(static_cast<uint32_t>(
         alpaka::idx::getIdx<alpaka::Grid, alpaka::Blocks>(acc)[0]));
@@ -37,7 +39,7 @@ public:
     const uint32_t i(static_cast<uint32_t>(
         alpaka::idx::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0]));
 
-    _func(i, A, res);
+    _func(i, res, A);
   }
 };
 
@@ -67,47 +69,69 @@ struct AlpakaExecutor {
       Function f, Shape iter, ResultFactory result, SharedFactory sf) const
   {
     auto &pattern = iter.pattern();
+    auto &result_pattern = result().pattern();
 
-    using PatternT   = typename Shape::pattern_type;
-    using value_type = typename Shape::value_type;
-    using dim        = alpaka::dim::DimInt<PatternT::ndim()>;
+    using PatternT          = typename Shape::pattern_type;
+    using value_type        = typename Shape::value_type;
+    using dim               = alpaka::dim::DimInt<PatternT::ndim()>;
+    using result_type       = typename std::result_of<ResultFactory()>::type;
+    using result_value_type = typename result_type::value_type;
 
     auto queue = ctx.queue();
+
+    std::size_t block_nr = 0;
 
     // Assume we have a LocalPattern that lets us iterate over local blocks
     // for each accelerator
     for (auto const &entity : ctx.entities()) {
       for (auto &block : pattern.blocks_local_for_entity(entity)) {
+        block_nr++;
         if (block.size() == 0) {
           continue;
         }
         // 1. create workdiv from block
         auto extents = alpaka::vec::createVecFromIndexedFn<dim, arr_to_vec>(
             block.extents());
-        std::size_t one = 1;
-        alpaka::vec::Vec<dim, std::size_t> thread_extent{one, one, one};
+        auto thread_extent =
+            alpaka::vec::createVecFromIndexedFn<dim, unity_vec>(
+                static_cast<std::size_t>(1));
         auto offsets = block.offsets();
+        std::cout << "Extents: " << extents;
         alpaka::workdiv::WorkDivMembers<dim, std::size_t> const workDiv{
             alpaka::workdiv::getValidWorkDiv<Acc>(
-                entity.device(), extents, thread_extent)};
+                entity.device(), extents, thread_extent, false)};
 
         // 2. create host buffer, TODO: simplify
         auto block_begin =
             static_cast<typename Shape::pointer>(iter.globmem().begin()) +
-            pattern.global_at(block.offsets());
+            pattern.global_at(offsets);
 
         auto host_buf =
             mephisto::HostDataBuffer<value_type, Entity, PatternT::ndim()>{
                 block, block_begin.local()};
 
+        auto result_block =
+            result_pattern.block_local_for_entity(entity, block_nr);
+        auto result_begin =
+            static_cast<typename result_type::pointer>(result().globmem().begin()) +
+            result_pattern.global_at(offsets);
+        auto result_buf = mephisto::
+            HostDataBuffer<result_value_type, Entity, PatternT::ndim()>{
+                result_block, result_begin.local()};
+
         // 3. copy the buffer to the entity
-        auto device_buf = mephisto::put(queue, host_buf, entity);
+        auto device_buf        = mephisto::put(queue, host_buf, entity);
+        auto result_device_buf = mephisto::put(queue, result_buf, entity);
 
         // 4. work
         Kernel<Function> kernel(f);
 
         auto const taskKernel(alpaka::kernel::createTaskKernel<Acc>(
-            workDiv, kernel, device_buf.begin(), device_buf.begin(), block.size()));
+            workDiv,
+            kernel,
+            device_buf.begin(),
+            result_device_buf.begin(),
+            block.size()));
 
         alpaka::queue::enqueue(queue, taskKernel);
 
