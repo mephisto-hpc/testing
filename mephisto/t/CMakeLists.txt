@@ -40,4 +40,10 @@ IF(DASH-MPI_FOUND)
         for_each_test
         PUBLIC "alpaka;${DASH_LIBRARIES};gtest_main")
     SET_PROPERTY(TARGET for_each_test PROPERTY CUDA_STANDARD 14)
+    ALPAKA_ADD_EXECUTABLE(
+        transform_reduce_test
+        "transform_reduce_test.cpp")
+    TARGET_LINK_LIBRARIES(
+        transform_reduce_test
+        PUBLIC "alpaka;${DASH_LIBRARIES};gtest_main")
 ENDIF()

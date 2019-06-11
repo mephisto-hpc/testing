@@ -1,5 +1,5 @@
 #include "gtest/gtest.h"
-#include "for_each_test.h"
+#include "transform_reduce_test.h"
 #include <libdash.h>
 #include <mephisto/algorithm/for_each>
 #include <mephisto/execution>
@@ -8,9 +8,8 @@
 #include <patterns/local_pattern.h>
 #include <alpaka/alpaka.hpp>
 
-TEST_F(ForEachTest, itWorks) {
-  auto const Dim = 3;
-  using Data     = int;
+TEST_F(TransformReduceTest, MinElement) {
+  auto const Dim = 2;
   using ViewT    = typename dash::Array<Data>::local_type;
   using SizeT    = ArrayT::size_type;
   using EntityT =
@@ -21,7 +20,7 @@ TEST_F(ForEachTest, itWorks) {
   using PatternT    = patterns::BalancedLocalPattern<BasePattern, EntityT>;
   using ArrayT      = dash::Array<Data, dash::default_index_t, PatternT>;
 
-  BasePattern base{5, 5, 2};
+  BasePattern base{5, 5};
   PatternT pattern{base};
   ArrayT   arr{pattern};
   dash::fill(arr.begin(), arr.end(), 42);
@@ -38,16 +37,18 @@ TEST_F(ForEachTest, itWorks) {
   auto policy = mephisto::execution::make_parallel_policy(executor);
 
   // set the coordinates using an Alpaka policy
-  dash::transform(
-      policy, arr.begin(), arr.end(), arr.begin(), [](const Data i) {
-        return i + 1;
-      });
+  dash::transform_reduce(
+      policy,
+      arr.begin(),
+      arr.end(),
+      Data{0},
+      [](const Data sum, const Data i) { return sum + i; },
+      [](const auto i) { return i + 13; });
 
   // Check the written coordinates using the standard for_each_with_index
-  dash::for_each(
-      arr.begin(), arr.end(), [](const Data &d) {
-        std::cout << "Result :" << d << std::endl;
-      });
+  dash::for_each(arr.begin(), arr.end(), [](const Data &d) {
+    std::cout << "Result :" << d << std::endl;
+  });
 }
 
 

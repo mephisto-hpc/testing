@@ -2,6 +2,8 @@
 #define MEPHISTO_UTIL_H
 
 #include <cstddef>
+#include <alpaka/alpaka.hpp>
+#include <dash/algorithm/LocalRange.h>
 
 namespace mephisto {
 
@@ -27,6 +29,22 @@ struct unity_vec {
     return arg;
   }
 };
+
+
+template <typename T>
+auto buf_size(T vec)
+{
+  return alpaka::vec::Vec<alpaka::dim::DimInt<1>, size_t>::all(
+      std::distance(vec.begin(), vec.end()));
+}
+
+template <typename T>
+auto buf_size(dash::LocalRange<T> range)
+{
+  return alpaka::vec::Vec<alpaka::dim::DimInt<1>, size_t>::all(
+      std::distance(range.begin, range.end));
+}
+
 }  // namespace mephisto
 
 #endif
