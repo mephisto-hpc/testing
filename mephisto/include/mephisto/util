@@ -32,18 +32,32 @@ struct unity_vec {
 
 
 template <typename T>
-auto buf_size(T vec)
+auto buf_size(T& vec)
 {
   return alpaka::vec::Vec<alpaka::dim::DimInt<1>, size_t>::all(
       std::distance(vec.begin(), vec.end()));
 }
 
 template <typename T>
-auto buf_size(dash::LocalRange<T> range)
+auto buf_size(dash::LocalRange<T>& range)
 {
   return alpaka::vec::Vec<alpaka::dim::DimInt<1>, size_t>::all(
       std::distance(range.begin, range.end));
 }
+
+template <typename value_type>
+value_type* begin(std::vector<value_type>& v)
+{
+  return v.data();
+}
+
+template <typename value_type>
+value_type* begin(dash::LocalRange<value_type>& r)
+{
+  return r.begin;
+}
+
+
 
 }  // namespace mephisto
 

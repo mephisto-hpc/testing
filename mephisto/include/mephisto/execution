@@ -67,7 +67,7 @@ struct AlpakaExecutor {
       class ResultFactory,
       class SharedFactory>
   void bulk_twoway_execute(
-      Function f, Shape iter, ResultFactory result, SharedFactory sf) const
+      Function f, Shape iter, ResultFactory result_f, SharedFactory sf) const
   {
     auto &pattern = iter.pattern();
 
@@ -75,19 +75,27 @@ struct AlpakaExecutor {
     using value_type        = typename Shape::value_type;
     using dim               = alpaka::dim::DimInt<PatternT::ndim()>;
     using result_type       = typename std::result_of<ResultFactory()>::type;
-    using result_value_t    = typename result_type::value_type;
+    using result_value_t    = typename std::decay<result_type>::type::value_type;
 
     auto queue = ctx.queue();
 
+    auto& result = result_f();
     std::size_t block_nr = 0;
 
     // Assume we have a LocalPattern that lets us iterate over local blocks
     // for each accelerator
+
+    auto host_result_view = alpaka::mem::view::createStaticDevMemView(
+        ::mephisto::begin(result),
+        alpaka::dev::DevCpu{
+            alpaka::pltf::getDevByIdx<alpaka::pltf::PltfCpu>(0u)},
+        ::mephisto::buf_size(result));
     for (auto const &entity : ctx.entities()) {
       auto result_buf = alpaka::mem::buf::alloc<result_value_t, std::size_t>(
-          entity.device(), ::mephisto::buf_size(result()));
+          entity.device(), ::mephisto::buf_size(result));
+      alpaka::mem::view::copy(
+          queue, result_buf, host_result_view, mephisto::buf_size(result));
       for (auto &block : pattern.blocks_local_for_entity(entity)) {
-        block_nr++;
         if (block.size() == 0) {
           continue;
         }
@@ -98,6 +106,7 @@ struct AlpakaExecutor {
             alpaka::vec::createVecFromIndexedFn<dim, unity_vec>(
                 static_cast<std::size_t>(1));
         auto offsets = block.offsets();
+
         alpaka::workdiv::WorkDivMembers<dim, std::size_t> const workDiv{
             alpaka::workdiv::getValidWorkDiv<Acc>(
                 entity.device(), extents, thread_extent, false)};
@@ -111,9 +120,8 @@ struct AlpakaExecutor {
             mephisto::HostDataBuffer<value_type, Entity, PatternT::ndim()>{
                 block, block_begin.local()};
 
-
         // 3. copy the buffer to the entity
-        auto device_buf        = mephisto::put(queue, host_buf, entity);
+        auto device_buf = mephisto::put(queue, host_buf, entity);
 
         // 4. work
         Kernel<Function> kernel(f);
@@ -121,15 +129,21 @@ struct AlpakaExecutor {
         auto const taskKernel(alpaka::kernel::createTaskKernel<Acc>(
             workDiv,
             kernel,
-            block_nr,
+            block_nr++,
             device_buf.begin(),
             alpaka::mem::view::getPtrNative(result_buf),
             block.size()));
 
         alpaka::queue::enqueue(queue, taskKernel);
 
-        // 5. copy data back
-        mephisto::get(queue, device_buf, host_buf);
+        auto ptr = alpaka::mem::view::getPtrNative(result_buf);
+        
+        alpaka::mem::view::copy(
+            queue,
+            host_result_view,
+            result_buf,
+            ::mephisto::buf_size(result));
+        auto hptr = alpaka::mem::view::getPtrNative(host_result_view);
       }
     }
   }

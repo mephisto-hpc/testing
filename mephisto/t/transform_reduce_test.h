@@ -46,16 +46,6 @@ public:
   // The mephisto kernel to use in the executor
   using Kernel = mephisto::ForEachWithIndexKernel;
 
-protected:
-  virtual void SetUp()
-  {
-    dash::init(&meph_argc, &meph_argv);
-  }
-
-  virtual void TearDown()
-  {
-    dash::finalize();
-  }
 };
 
 // This needs to be defined outside of TEST_F for nvcc.
