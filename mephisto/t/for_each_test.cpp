@@ -32,7 +32,7 @@ TEST_F(ForEachTest, itWorks) {
   Context ctx;
 
   // The executor is the one actually doing the computation
-  mephisto::execution::AlpakaExecutor<Context> executor{ctx};
+  mephisto::execution::AlpakaExecutor<Context> executor{&ctx};
 
   // The policy is used to relax guarantees.
   auto policy = mephisto::execution::make_parallel_policy(executor);

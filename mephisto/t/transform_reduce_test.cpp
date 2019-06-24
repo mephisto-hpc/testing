@@ -31,7 +31,7 @@ TEST_F(TransformReduceTest, MinElement2D) {
   Context ctx;
 
   // The executor is the one actually doing the computation
-  mephisto::execution::AlpakaExecutor<Context> executor{ctx};
+  mephisto::execution::AlpakaExecutor<Context> executor{&ctx};
 
   // The policy is used to relax guarantees.
   auto policy = mephisto::execution::make_parallel_policy(executor);
@@ -50,10 +50,8 @@ TEST_F(TransformReduceTest, MinElement2D) {
 
 TEST_F(TransformReduceTest, MinElement3D) {
   auto const Dim = 3;
-  using ViewT    = typename dash::Array<Data>::local_type;
-  using SizeT    = ArrayT::size_type;
   using EntityT =
-      mephisto::Entity<Dim, std::size_t, alpaka::acc::AccCpuSerial>;
+      mephisto::Entity<Dim, std::size_t, alpaka::acc::AccCpuThreads>;
   using Queue   = alpaka::queue::QueueCpuSync;
   using Context = mephisto::execution::AlpakaExecutionContext<EntityT, Queue>;
   using BasePattern = dash::BlockPattern<Dim>;
@@ -71,7 +69,7 @@ TEST_F(TransformReduceTest, MinElement3D) {
   Context ctx;
 
   // The executor is the one actually doing the computation
-  mephisto::execution::AlpakaExecutor<Context> executor{ctx};
+  mephisto::execution::AlpakaExecutor<Context> executor{&ctx};
 
   // The policy is used to relax guarantees.
   auto policy = mephisto::execution::make_parallel_policy(executor);

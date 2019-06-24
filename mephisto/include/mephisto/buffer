@@ -88,16 +88,18 @@ struct DeviceDataBuffer {
   static constexpr size_t MetaOffset =
       sizeof(Meta) + sizeof(Meta) % Alignment::value;
 
-  Element *   _data;
+  alpaka::mem::buf::Buf<device_t, char, alpaka::dim::DimInt<1>, std::size_t> _buf;
   void *      _base;
+  Element *   _data;
   std::size_t _entity_index;
 
-  DeviceDataBuffer(Entity ent, Element *base)
-
-    : _base(base)
+  template <typename Buffer>
+  DeviceDataBuffer(Entity ent, Buffer buf)
+    : _buf(buf)
+    , _base(alpaka::mem::view::getPtrNative(buf))
     , _entity_index(ent.index())
     , _data(reinterpret_cast<Element *>(
-          reinterpret_cast<char *>(base) + MetaOffset))
+          reinterpret_cast<char *>(_base) + MetaOffset))
   {
   }
 
@@ -193,21 +195,14 @@ public:
   auto alloc_entity_buf(Entity &entity)
   {
     // Return a newly created and allocated buffer
-    auto buf =
-        alpaka::mem::buf::alloc<char, std::size_t>(entity.device(), _bufsize);
-    return DeviceBuf{entity,
-                        reinterpret_cast<NonConstElement *>(
-                            alpaka::mem::view::getPtrNative(buf))};
-  }
-
-  template <typename Entity>
-  DeviceBuf getDeviceDataBuffer(Entity &entity)
-  {
-    auto accBuf = alpaka::mem::view::getPtrNative(entity.deviceBuf);
-    // Add MetaOffset bytes offset to the accBuf address */
-    auto deviceBufAddr = reinterpret_cast<NonConstElement *>(
-        reinterpret_cast<char *>(accBuf) + MetaOffset);
-    return DeviceBuf(deviceBufAddr);
+    using buf_t = alpaka::mem::buf::Buf<
+        decltype(entity.device()),
+        char,
+        alpaka::dim::DimInt<1>,
+        std::size_t>;
+    buf_t buf(alpaka::mem::buf::alloc<char, std::size_t>(
+        entity.device(), _bufsize));
+    return DeviceBuf{entity, std::move(buf)};
   }
 
   Meta &meta()
