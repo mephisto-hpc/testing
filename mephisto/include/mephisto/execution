@@ -41,7 +41,6 @@ public:
     const uint32_t i(static_cast<uint32_t>(
         alpaka::idx::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0]));
 
-    log("i: {}", i);
     _func(block_index, i, res, A);
   }
 };
@@ -81,15 +80,12 @@ struct AlpakaExecutor {
     using result_type       = typename std::result_of<ResultFactory()>::type;
     using result_value_t    = typename std::decay<result_type>::type::value_type;
 
-    auto &queue = ctx->queue();
-
-    auto& result = result_f();
+    auto &      queue    = ctx->queue();
+    auto &      result   = result_f();
     std::size_t block_nr = 0;
-
 
     // Assume we have a LocalPattern that lets us iterate over local blocks
     // for each accelerator
-
     auto host_result_view = alpaka::mem::view::createStaticDevMemView(
         ::mephisto::begin(result),
         alpaka::dev::DevCpu{

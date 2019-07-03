@@ -22,8 +22,8 @@ TEST_F(ForEachTest, itWorks) {
   using ArrayT      = dash::Array<Data, dash::default_index_t, PatternT>;
 
   BasePattern base{5, 5, 2};
-  PatternT pattern{base};
-  ArrayT   arr{pattern};
+  PatternT    pattern{base};
+  ArrayT      arr{pattern};
   dash::fill(arr.begin(), arr.end(), 42);
 
   // Setup of the executor:

@@ -73,13 +73,13 @@ TEST_F(TransformReduceTest, MinElement3D) {
 
   // The policy is used to relax guarantees.
   auto policy = mephisto::execution::make_parallel_policy(executor);
-
+  Data init(0);
   // set the coordinates using an Alpaka policy
   auto result = dash::transform_reduce(
       policy,
       arr.begin(),
       arr.end(),
-      Data{0},
+      init,
       [](const Data sum, const Data i) { return sum + i; },
       [](const auto i) { return i + 13; });
 
