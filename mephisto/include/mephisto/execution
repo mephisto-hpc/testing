@@ -37,13 +37,27 @@ public:
         alpaka::idx::getIdx<alpaka::Block, alpaka::Threads>(acc)[0]));
     const uint32_t gridDimension(static_cast<uint32_t>(
         alpaka::workdiv::getWorkDiv<alpaka::Grid, alpaka::Blocks>(acc)[0]));
+    const uint32_t threadElementExtent(static_cast<uint32_t>(
+        alpaka::workdiv::getWorkDiv<alpaka::Thread, alpaka::Elems>(acc).prod()));
 
     const uint32_t i(static_cast<uint32_t>(
         alpaka::idx::getIdx<alpaka::Grid, alpaka::Threads>(acc)[0]));
 
-    _func(block_index, i, res, A);
+    TIdx const threadFirstElemIdx(i * threadElementExtent);
+
+    if (threadFirstElemIdx < numElements) {
+      TIdx const threadLastElemIdx(threadFirstElemIdx + threadElementExtent);
+      TIdx const threadLastElemIdxClipped(
+          (numElements > threadLastElemIdx) ? threadLastElemIdx
+                                            : numElements);
+      for (TIdx a(threadFirstElemIdx); a < threadLastElemIdxClipped; ++a) {
+        _func(block_index, a, res, A);
+      }
+    }
   }
 };
+
+
 
 /**
  * An executor that uses alpaka to do the work.
@@ -105,14 +119,15 @@ struct AlpakaExecutor {
             block.extents());
         auto thread_extent =
             alpaka::vec::createVecFromIndexedFn<dim, unity_vec>(
-                static_cast<std::size_t>(1));
+                  static_cast<std::size_t>(block.size()));
+
         auto offsets = block.offsets();
 
         alpaka::workdiv::WorkDivMembers<dim, std::size_t> const workDiv{
             alpaka::workdiv::getValidWorkDiv<Acc>(
                 entity.device(), extents, thread_extent, false)};
 
-        // 2. create host buffer, TODO: simplify
+        // 2. create host buffer
         auto block_begin =
             static_cast<typename Shape::pointer>(iter.globmem().begin()) +
             pattern.global_at(offsets);
@@ -149,6 +164,10 @@ struct AlpakaExecutor {
   AlpakaContext &context() const
   {
     return ctx;
+  }
+
+  unsigned int concurrency() const {
+    return Entity::total();
   }
 };
 

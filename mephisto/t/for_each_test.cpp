@@ -8,7 +8,8 @@
 #include <patterns/local_pattern.h>
 #include <alpaka/alpaka.hpp>
 
-TEST_F(ForEachTest, itWorks) {
+TEST_F(ForEachTest, itWorks)
+{
   auto const Dim = 3;
   using Data     = int;
   using ViewT    = typename dash::Array<Data>::local_type;
@@ -44,10 +45,9 @@ TEST_F(ForEachTest, itWorks) {
       });
 
   // Check the written coordinates using the standard for_each_with_index
-  dash::for_each(
-      arr.begin(), arr.end(), [](const Data &d) {
-        std::cout << "Result :" << d << std::endl;
-      });
+  dash::for_each(arr.begin(), arr.end(), [](const Data &d) {
+    std::cout << "Result :" << d << std::endl;
+  });
 }
 
 
