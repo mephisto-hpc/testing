@@ -130,7 +130,7 @@ struct AlpakaExecutor {
         // 2. create host buffer
         auto block_begin =
             static_cast<typename Shape::pointer>(iter.globmem().begin()) +
-            pattern.global_at(offsets);
+            pattern.local_at(offsets);
 
         auto host_buf =
             mephisto::HostDataBuffer<value_type, Entity, PatternT::ndim()>{
