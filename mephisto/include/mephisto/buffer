@@ -211,7 +211,11 @@ public:
   }
 
   Element *data() const
+  {
+    return _begin;
+  }
 
+  Element *begin() const
   {
     return _begin;
   }

@@ -13,8 +13,10 @@ namespace mephisto {
  *
  * TODO: evaluate how well this could be implemented with STL-like code
  */
-template <typename Stream, typename Buffer, typename Entity>
+template <typename Stream, typename Buffer, typename Entity, typename std::enable_if<
+    !std::is_same<typename Entity::pltf_t, alpaka::pltf::PltfCpu>::value>::type* = nullptr>
 auto put(Stream &stream, Buffer &buf, Entity &entity)
+
 {
   alpaka::vec::Vec<alpaka::dim::DimInt<1u>, size_t> const meta_extent{
       static_cast<std::size_t>(1)};
@@ -31,12 +33,18 @@ auto put(Stream &stream, Buffer &buf, Entity &entity)
   auto device_data = entity_buf.data_view();
   alpaka::mem::view::copy(stream, device_data, host_data, buf.extents());
 
-
-
   return entity_buf;
 };
 
-template <typename Stream, typename EntityBuf, typename HostBuf>
+template <typename Stream, typename Buffer, typename Entity, typename std::enable_if<
+    std::is_same<typename Entity::pltf_t, alpaka::pltf::PltfCpu>::value>::type* = nullptr>
+auto put(Stream &stream, Buffer &buf, Entity &entity)
+{
+  return buf;
+}
+
+
+template <typename Stream, typename EntityBuf, typename HostBuf, typename = void>
 void get(Stream &stream, EntityBuf &entity_buf, HostBuf &host_buf){
   alpaka::vec::Vec<alpaka::dim::DimInt<1u>, size_t> const meta_extent{
       static_cast<std::size_t>(1)};

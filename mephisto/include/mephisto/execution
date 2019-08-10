@@ -136,6 +136,7 @@ struct AlpakaExecutor {
             mephisto::HostDataBuffer<value_type, Entity, PatternT::ndim()>{
                 block, block_begin.local()};
 
+
         // 3. copy the buffer to the entity
         auto device_buf = mephisto::put(queue, host_buf, entity);
 
